@@ -1,9 +1,6 @@
-"use client";
-
 import React, { ReactNode } from "react";
-import { BaseNode } from "@/registry/components/base-node";
+import { BaseNode } from "@/components/base-node";
 import { TableBody, TableRow, TableCell } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 /* DATABASE SCHEMA NODE HEADER ------------------------------------------------ */
 /**

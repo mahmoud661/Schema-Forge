@@ -1,0 +1,40 @@
+/* Simple styles for React Flow */
+
+/* Styling for the connection handles */
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.3);
+  transition: transform 0.2s;
+}
+
+/* Left handles style */
+.react-flow__handle-left {
+  background: #3b82f6 !important;
+}
+
+/* Right handles style */
+.react-flow__handle-right {
+  background: #10b981 !important;
+}
+
+/* Edge styling */
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+/* Making connection path visible */
+.react-flow__connection-path {
+  stroke-width: 2;
+  stroke: #3b82f6;
+}
+
+/* Hover effect for table rows */
+.react-flow__node .hover\:bg-muted\/50:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}

@@ -45,8 +45,8 @@ export const templates: Templates = {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "category_id",
-        targetHandle: "id",
+        sourceHandle: "category_id", // Using the title as handle ID
+        targetHandle: "id",         // Using the title as handle ID
         type: "smoothstep",
         animated: true,
       },
@@ -87,8 +87,8 @@ export const templates: Templates = {
         id: "e1-2",
         source: "1",
         target: "2",
-        sourceHandle: "author_id",
-        targetHandle: "id",
+        sourceHandle: "author_id", // Using the title as handle ID
+        targetHandle: "id",       // Using the title as handle ID
         type: "smoothstep",
         animated: true,
       },
@@ -147,8 +147,8 @@ export const templates: Templates = {
         id: "products-warehouses",
         source: "1",
         target: "2",
-        sourceHandle: "warehouse_id",
-        targetHandle: "id",
+        sourceHandle: "warehouse_id", // Using the title as handle ID
+        targetHandle: "id",           // Using the title as handle ID
         type: "smoothstep",
         animated: true,
       },
@@ -156,8 +156,8 @@ export const templates: Templates = {
         id: "products-suppliers",
         source: "1",
         target: "3",
-        sourceHandle: "supplier_id",
-        targetHandle: "id",
+        sourceHandle: "supplier_id", // Using the title as handle ID
+        targetHandle: "id",          // Using the title as handle ID
         type: "smoothstep",
         animated: true,
       },
