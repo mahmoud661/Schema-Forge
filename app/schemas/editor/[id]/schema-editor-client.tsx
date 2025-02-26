@@ -16,7 +16,6 @@ import {
   useReactFlow,
   Panel
 } from "@xyflow/react";
-// Add ReactFlow CSS import
 import "@xyflow/react/dist/style.css";
 import { useSchemaStore } from "@/lib/store";
 import SchemaNode from "@/components/schema-node";
@@ -25,13 +24,15 @@ import { Button } from "@/components/ui/button";
 import { Save, Undo, Redo } from "lucide-react";
 import { templates } from "@/lib/schema-templates";
 
+// Update the nodeTypes to use the new SchemaNode component
 const nodeTypes = {
   databaseSchema: SchemaNode,
 };
 
+// Update the node type to match the expected format by SchemaNode
 type SchemaNode = Node<{
-  name: string;
-  fields: { name: string; type: string }[];
+  label: string;
+  schema: { title: string; type: string }[];
 }>;
 
 function SchemaEditorFlow() {
@@ -64,8 +65,19 @@ function SchemaEditorFlow() {
     }
   }, [params.id, schemas, setNodes, setEdges]);
 
+  // Update the connect handler to log and include more info about connections
   const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection | Edge) => {
+      console.log("Creating connection:", params);
+      // Use a default edge type for better visibility
+      const edge = {
+        ...params,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#3b82f6', strokeWidth: 2 }
+      };
+      setEdges((eds) => addEdge(edge, eds));
+    },
     [setEdges]
   );
 
@@ -105,7 +117,7 @@ function SchemaEditorFlow() {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // Add onDrop handler
+  // Update the onDrop handler to create nodes with the correct data structure
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -121,7 +133,7 @@ function SchemaEditorFlow() {
         y: event.clientY,
       });
 
-      // Create a new node
+      // Create a new node with the correct data structure
       const newNode = {
         id: `${type}-${Date.now()}`,
         type: 'databaseSchema',
@@ -168,6 +180,16 @@ function SchemaEditorFlow() {
           onDrop={onDrop}
           className="bg-muted/30"
           style={{ width: '100%', height: '100%' }}
+          // Add these additional props for better connection handling
+          connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
+          connectionLineType="smoothstep"
+          snapToGrid={true}
+          snapGrid={[15, 15]}
+          defaultEdgeOptions={{
+            type: 'smoothstep',
+            animated: true,
+            style: { stroke: '#3b82f6', strokeWidth: 2 }
+          }}
         >
           <Background />
           <Controls />

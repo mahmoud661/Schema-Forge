@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Handle, Position } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +14,7 @@ interface LabeledHandleProps {
   labelClassName?: string;
 }
 
-export function LabeledHandle({
+export const LabeledHandle = ({
   id,
   title,
   type,
@@ -21,18 +22,33 @@ export function LabeledHandle({
   className,
   handleClassName,
   labelClassName,
-}: LabeledHandleProps) {
+}: LabeledHandleProps) => {
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center relative", className)}>
       <Handle
         id={id}
         type={type}
         position={position}
-        className={cn("!bg-primary !border-border", handleClassName)}
+        className={cn(
+          "h-3 w-3 rounded-full bg-primary border-2 border-white",
+          position === Position.Left && "-ml-1.5",
+          position === Position.Right && "-mr-1.5",
+          handleClassName
+        )}
+        // Remove absolute positioning from style to let Handle component handle it
+        style={{ zIndex: 50 }} 
+        isConnectable={true}
       />
-      <span className={cn("text-sm text-muted-foreground", labelClassName)}>
+      <span
+        className={cn(
+          "truncate text-xs",
+          position === Position.Left && "pl-3",
+          position === Position.Right && "text-right pr-3",
+          labelClassName
+        )}
+      >
         {title}
       </span>
     </div>
   );
-}
+};
