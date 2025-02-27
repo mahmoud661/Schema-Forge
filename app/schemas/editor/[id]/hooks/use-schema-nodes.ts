@@ -3,12 +3,12 @@ import { useReactFlow } from "@xyflow/react";
 import { SchemaNode, SchemaNodeData } from "../types";
 
 export function useSchemaNodes() {
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<SchemaNode | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
   const onNodeClick = useCallback((_, node: SchemaNode) => {
-    setSelectedNode(node.id);
+    setSelectedNode(node);
   }, []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -37,22 +37,30 @@ export function useSchemaNodes() {
         data: {
           label: 'New Table',
           schema: [
-            { title: "id", type: "uuid" },
-            { title: "name", type: "varchar" },
+            { 
+              title: "id", 
+              type: "uuid",
+              constraints: ["primary", "notnull"] 
+            },
+            { 
+              title: "created_at", 
+              type: "timestamp",
+              constraints: ["notnull"]
+            },
           ],
         },
       };
 
-      setNodes((nds) => nds.concat(newNode as any));
+      setNodes((nds) => nds.concat(newNode as SchemaNode));
     },
     [screenToFlowPosition]
   );
 
-  const updateNodeData = useCallback((nodeId: string, nodeData: Partial<SchemaNodeData>, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
-    setNodes(nodes => nodes.map(node => 
-      node.id === nodeId 
-        ? { ...node, data: { ...node.data, ...nodeData } }
-        : node
+  const updateNodeData = useCallback((node: SchemaNode, nodeData: Partial<SchemaNodeData>, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
+    setNodes(nodes => nodes.map(n => 
+      n.id === node.id 
+        ? { ...n, data: { ...n.data, ...nodeData } }
+        : n
     ));
   }, []);
 
