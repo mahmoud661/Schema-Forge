@@ -1,16 +1,18 @@
-import { Node, Edge } from "@xyflow/react";
+import { Node } from "@xyflow/react";
 
-export type ColumnSchema = {
+export interface ColumnSchema {
   title: string;
   type: string;
   constraints?: string[];
-};
+  id?: string; // Add optional ID for stable rendering
+}
 
-export type SchemaNodeData = {
+export interface SchemaNodeData {
   label: string;
   schema: ColumnSchema[];
-};
+}
 
-export type SchemaNode = Node<SchemaNodeData>;
-
-export type SchemaEdge = Edge;
+export interface SchemaNode extends Node {
+  type: 'databaseSchema';
+  data: SchemaNodeData;
+}

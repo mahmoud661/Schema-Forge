@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { SchemaNode, SchemaNodeData } from "../types";
 
 export function useSchemaNodes() {
   const [selectedNode, setSelectedNode] = useState<SchemaNode | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getNode } = useReactFlow();
 
   const onNodeClick = useCallback((_, node: SchemaNode) => {
     setSelectedNode(node);
@@ -57,12 +57,38 @@ export function useSchemaNodes() {
   );
 
   const updateNodeData = useCallback((node: SchemaNode, nodeData: Partial<SchemaNodeData>, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
+    // Create an updated node with the new data
+    const updatedNodeData = { 
+      ...node.data, 
+      ...nodeData 
+    };
+    
+    // Update the nodes state
     setNodes(nodes => nodes.map(n => 
       n.id === node.id 
-        ? { ...n, data: { ...n.data, ...nodeData } }
+        ? { ...n, data: updatedNodeData }
         : n
     ));
-  }, []);
+    
+    // Update the selected node reference immediately with the new data
+    setSelectedNode(prev => {
+      if (prev && prev.id === node.id) {
+        return { ...prev, data: updatedNodeData };
+      }
+      return prev;
+    });
+    
+    // Also ensure the ReactFlow internal state is in sync
+    if (node.id) {
+      // We use setTimeout to ensure this runs after React has processed our state updates
+      setTimeout(() => {
+        const updatedNode = getNode(node.id);
+        if (updatedNode) {
+          setSelectedNode(updatedNode as SchemaNode);
+        }
+      }, 0);
+    }
+  }, [getNode]);
 
   return {
     selectedNode,

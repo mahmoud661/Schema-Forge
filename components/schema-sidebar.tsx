@@ -7,12 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Table, KeyRound, Hash, Type, Plus, Trash2, ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { SchemaNodeData } from "@/app/schemas/editor/[id]/types";
+import { Table, KeyRound, Hash, Type, Plus, Trash2 } from "lucide-react";
+import { SchemaNode, SchemaNodeData } from "@/app/schemas/editor/[id]/types";
 
 interface SidebarProps {
-  selectedNode: string | null;
+  selectedNode: SchemaNode | null;
   onUpdateNode: (data: Partial<SchemaNodeData>) => void;
 }
 
@@ -51,10 +50,11 @@ export function Sidebar({ selectedNode, onUpdateNode }: SidebarProps) {
 
   const addColumn = () => {
     if (!selectedNode) return;
+    const columnId = Date.now().toString(); // Generate unique ID for new column
     onUpdateNode({
       schema: [
         ...(selectedNode.data?.schema || []),
-        { title: "new_column", type: "varchar", constraints: [] }
+        { title: "new_column", type: "varchar", constraints: [], id: columnId }
       ]
     });
   };
@@ -62,6 +62,19 @@ export function Sidebar({ selectedNode, onUpdateNode }: SidebarProps) {
   const updateColumn = (index: number, field: string, value: any) => {
     if (!selectedNode) return;
     const newSchema = [...(selectedNode.data?.schema || [])];
+    
+    // For title updates, ensure we handle this specially
+    if (field === 'title') {
+      // Ensure title is unique or has a fallback
+      const existingTitles = selectedNode.data.schema
+        .map(c => c.title)
+        .filter((t, i) => i !== index);
+      
+      if (existingTitles.includes(value)) {
+        value = `${value}_${index}`;
+      }
+    }
+    
     newSchema[index] = { ...newSchema[index], [field]: value };
     onUpdateNode({ schema: newSchema });
   };
@@ -137,8 +150,12 @@ export function Sidebar({ selectedNode, onUpdateNode }: SidebarProps) {
             </div>
 
             <div className="space-y-4">
-              {selectedNode.data?.schema.map((column: any, index: number) => (
-                <div key={index} className="space-y-2 p-3 border rounded-lg">
+              {selectedNode.data?.schema.map((column: any, index: number) => {
+                // Generate a stable key that doesn't depend on the title
+                const columnKey = column.id || `column-${index}`;
+                
+                return (
+                <div key={columnKey} className="space-y-2 p-3 border rounded-lg">
                   <div className="flex items-center gap-2">
                     <Input
                       placeholder="Column name"
@@ -176,20 +193,21 @@ export function Sidebar({ selectedNode, onUpdateNode }: SidebarProps) {
 
                   <div className="flex flex-wrap gap-3 pt-2">
                     {constraints.map((constraint) => (
-                      <div key={constraint.id} className="flex items-center gap-2">
+                      <div key={`${columnKey}-${constraint.id}`} className="flex items-center gap-2">
                         <Switch
                           checked={(column.constraints || []).includes(constraint.id)}
                           onCheckedChange={() => toggleConstraint(index, constraint.id)}
-                          id={`${index}-${constraint.id}`}
+                          id={`${columnKey}-${constraint.id}`}
                         />
-                        <Label htmlFor={`${index}-${constraint.id}`} className="text-sm">
+                        <Label htmlFor={`${columnKey}-${constraint.id}`} className="text-sm">
                           {constraint.label}
                         </Label>
                       </div>
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

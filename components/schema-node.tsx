@@ -32,16 +32,19 @@ const SchemaNode = memo(
           {data.label}
         </DatabaseSchemaNodeHeader>
         <DatabaseSchemaNodeBody>
-          {data.schema.map((column: ColumnSchema) => {
+          {data.schema.map((column: ColumnSchema, idx) => {
             const constraints = column.constraints || [];
             const isPrimary = constraints.includes('primary');
             const isUnique = constraints.includes('unique');
             const isNotNull = constraints.includes('notnull');
             const isIndex = constraints.includes('index');
+            
+            // Use a stable key for each column
+            const columnKey = column.id || `${idx}-${column.title}`;
 
             return (
               <DatabaseSchemaTableRow 
-                key={column.title} 
+                key={columnKey} 
                 className="hover:bg-primary/5 transition-colors duration-150"
               >
                 <Handle
@@ -91,6 +94,11 @@ const SchemaNode = memo(
         </DatabaseSchemaNodeBody>
       </DatabaseSchemaNode>
     );
+  },
+  // Add a custom comparison function to ensure updates happen when needed
+  (prevProps, nextProps) => {
+    return JSON.stringify(prevProps.data) === JSON.stringify(nextProps.data) && 
+           prevProps.selected === nextProps.selected;
   }
 );
 

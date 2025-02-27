@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Connection, Edge, useNodesState, useEdgesState, addEdge, Node, useReactFlow } from "@xyflow/react";
 import { useSchemaStore } from "@/lib/store";
@@ -11,6 +11,8 @@ export function useSchemaFlow() {
   const { schemas, updateSchema } = useSchemaStore();
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNode[]>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("visual");
   const { project, undo, redo, canUndo, canRedo } = useReactFlow();
 
   useEffect(() => {
@@ -68,15 +70,46 @@ export function useSchemaFlow() {
     ));
   }, [setNodes]);
 
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    setSelectedEdge(edge);
+  }, []);
+
+  // This function is kept for compatibility but won't be passed to ReactFlow
+  const onEdgeUpdate = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    setEdges(edges => edges.map(e => e.id === oldEdge.id ? { ...oldEdge, ...newConnection } : e));
+  }, [setEdges]);
+
+  const updateEdgeData = useCallback((edgeId: string, data: any) => {
+    setEdges(edges => edges.map(edge => 
+      edge.id === edgeId ? { ...edge, ...data } : edge
+    ));
+    
+    // Update the selected edge reference
+    setSelectedEdge(prev => {
+      if (prev && prev.id === edgeId) {
+        return { ...prev, ...data };
+      }
+      return prev;
+    });
+  }, [setEdges]);
+
   return {
     nodes,
     edges,
     setNodes,
+    setEdges,
     onNodesChange,
     onEdgesChange,
     onConnect,
     onSave,
     onNodeDelete,
+    onEdgeClick,
+    onEdgeUpdate,
+    selectedEdge,
+    setSelectedEdge,
+    updateEdgeData,
+    activeTab,
+    setActiveTab,
     undo,
     redo,
     canUndo,
