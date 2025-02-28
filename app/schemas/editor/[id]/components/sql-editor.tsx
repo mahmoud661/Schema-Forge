@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Download, ArrowRight, X } from "lucide-react";
 import { SchemaNode } from "../types";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { validateSqlSyntax } from "./sql-validation";
+import { useDebounce } from "use-debounce";
 
 interface SqlEditorProps {
   nodes: SchemaNode[];
@@ -20,6 +22,10 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   const [editableSql, setEditableSql] = useState<string>("");
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
+  
+  // Debounce the SQL changes for live updates
+  const [debouncedSql] = useDebounce(editableSql, 1000);
   
   useEffect(() => {
     // Generate SQL based on nodes and edges
@@ -29,6 +35,13 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
       setEditableSql(generatedSql);
     }
   }, [nodes, edges, dbType, isEditing]);
+  
+  // Effect for live updates when SQL changes
+  useEffect(() => {
+    if (isEditing && liveEditMode && debouncedSql) {
+      handleApplySqlChangesInternal(debouncedSql, true);
+    }
+  }, [debouncedSql, liveEditMode, isEditing]);
 
   const generateSql = (type: string, schemaNodes: SchemaNode[], schemaEdges: any[]): string => {
     let sql = "";
@@ -233,66 +246,82 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
       const newNodes: SchemaNode[] = [];
       const newEdges: any[] = [];
       
-      // Extract CREATE TABLE statements
-      const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?(\w+)["`]?\s*\(([\s\S]*?)\);/gi;
+      // Extract CREATE TABLE statements - improved regex to better handle quoted names
+      const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
       
       let tableMatch;
       let tableIndex = 0;
+      let foundTables = false;
       
       // Process each table definition
       while ((tableMatch = tableRegex.exec(sql)) !== null) {
-        const tableName = tableMatch[1];
-        const tableContent = tableMatch[2];
+        foundTables = true;
+        // The table name can be in any of the capture groups depending on the quote style used
+        const tableName = tableMatch[1] || tableMatch[2] || tableMatch[3] || tableMatch[4];
+        const tableContent = tableMatch[5];
         
-        // Process columns with more flexible regex to handle various SQL formats
+        if (!tableName || !tableContent) continue;
+        
+        // Process columns
         const columns = [];
-        const columnLines = tableContent.split(',').map(line => line.trim());
+        // Split by commas, but be smarter about it to handle cases with commas in type definitions
+        const columnLines = tableContent
+          .split(/,(?![^(]*\))/) // Split by commas not inside parentheses
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
         
         for (const columnLine of columnLines) {
-          // Skip lines that don't look like column definitions (e.g., constraints)
-          if (!columnLine || columnLine.startsWith('CONSTRAINT') || columnLine.startsWith('PRIMARY KEY') || columnLine.startsWith('FOREIGN KEY')) {
+          // Skip constraint lines that don't define columns
+          if (columnLine.toUpperCase().startsWith('CONSTRAINT') || 
+              columnLine.toUpperCase().startsWith('PRIMARY KEY') || 
+              columnLine.toUpperCase().startsWith('FOREIGN KEY')) {
             continue;
           }
           
-          // Improved column regex that handles quoted names and types with parameters
-          const columnRegex = /^["`]?(\w+)["`]?\s+([A-Za-z0-9\(\)]+)(?:\s+(.*))?$/;
+          // More flexible column parsing regex
+          const columnRegex = /^(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\([^)]*\))?)(?:\s+(.*))?$/i;
           const columnMatch = columnLine.match(columnRegex);
           
           if (columnMatch) {
-            const columnName = columnMatch[1];
-            const columnType = columnMatch[2];
-            const constraintText = columnMatch[3] || '';
+            // Column name can be in any of these capture groups depending on quoting
+            const columnName = columnMatch[1] || columnMatch[2] || columnMatch[3] || columnMatch[4];
+            const columnType = columnMatch[5];
+            const constraintText = columnMatch[6] || '';
             const constraints = [];
+            
             if (constraintText.toUpperCase().includes('PRIMARY KEY')) constraints.push('primary');
             if (constraintText.toUpperCase().includes('NOT NULL')) constraints.push('notnull');
             if (constraintText.toUpperCase().includes('UNIQUE')) constraints.push('unique');
             
             columns.push({
               title: columnName,
-              type: columnType,
+              type: mapToBaseType(columnType),
               constraints,
               id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
             });
           }
         }
         
-        if (columns.length === 0) {
-          console.warn(`No valid columns found for table ${tableName}`);
-          continue;
+        // Only add the table if we found at least one valid column
+        if (columns.length > 0) {
+          newNodes.push({
+            id: `sql-node-${Date.now()}-${tableIndex}`,
+            type: 'databaseSchema',
+            position: { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 },
+            data: {
+              label: tableName,
+              schema: columns
+            }
+          });
+          tableIndex++;
         }
-        
-        // Create node for this table
-        newNodes.push({
-          id: `sql-node-${Date.now()}-${tableIndex}`,
-          type: 'databaseSchema',
-          position: { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 },
-          data: {
-            label: tableName,
-            schema: columns
-          }
-        });
-        
-        tableIndex++;
+      }
+      
+      // If no tables were found through regex, check if there's at least one CREATE TABLE statement
+      if (!foundTables && sql.toUpperCase().includes('CREATE TABLE')) {
+        throw new Error("SQL syntax appears to be invalid. Check for proper table definitions.");
+      } else if (newNodes.length === 0) {
+        throw new Error("No valid tables found in the SQL. Please check your syntax.");
       }
       
       // Extract foreign key constraints
@@ -325,36 +354,78 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         }
       }
       
-      // If we have nodes but parsing didn't find any, there may be a syntax issue
-      if (newNodes.length === 0) {
-        throw new Error("No valid tables found in the SQL. Please check your syntax.");
-      }
-      
       return { nodes: newNodes, edges: newEdges };
     } catch (error) {
       console.error('Error parsing SQL:', error);
       throw new Error(`Failed to parse SQL: ${error.message}`);
     }
   };
+  
+  // Helper function to map complex SQL types to our base types
+  const mapToBaseType = (sqlType: string): string => {
+    const type = sqlType.toLowerCase().split('(')[0].trim();
+    
+    // Common mappings
+    const typeMap: Record<string, string> = {
+      'varchar': 'varchar',
+      'character varying': 'varchar',
+      'char': 'varchar',
+      'text': 'text',
+      'int': 'int4',
+      'integer': 'int4',
+      'smallint': 'int4',
+      'bigint': 'int4',
+      'serial': 'int4',
+      'numeric': 'money',
+      'decimal': 'money',
+      'money': 'money',
+      'timestamp': 'timestamp',
+      'timestamptz': 'timestamp',
+      'date': 'date',
+      'time': 'time',
+      'bool': 'boolean',
+      'boolean': 'boolean',
+      'jsonb': 'jsonb',
+      'json': 'jsonb',
+      'uuid': 'uuid'
+    };
+    
+    return typeMap[type] || 'varchar';
+  };
 
-  const handleApplySqlChanges = () => {
+  const handleApplySqlChangesInternal = (sql: string, isLiveUpdate = false) => {
     try {
       setError(null);
-      if (!editableSql.trim()) {
+      if (!sql.trim()) {
         setError("SQL cannot be empty");
         return;
       }
       
-      const parsedSchema = parseSqlToSchema(editableSql);
+      // Validate SQL before parsing
+      const validation = validateSqlSyntax(sql);
+      if (!validation.isValid) {
+        setError(validation.errors[0]);
+        return;
+      }
+      
+      const parsedSchema = parseSqlToSchema(sql);
       if (parsedSchema) {
         onUpdateSchema(parsedSchema.nodes, parsedSchema.edges);
-        setIsEditing(false);
-        toast.success("Schema updated successfully");
+        if (!isLiveUpdate) {
+          setIsEditing(false);
+          toast.success("Schema updated successfully");
+        }
       }
     } catch (error) {
       setError(error.message || "An error occurred while parsing SQL");
-      toast.error("Failed to update schema");
+      if (!isLiveUpdate) {
+        toast.error("Failed to update schema");
+      }
     }
+  };
+
+  const handleApplySqlChanges = () => {
+    handleApplySqlChangesInternal(editableSql);
   };
 
   const cancelEdit = () => {
@@ -386,6 +457,16 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
             </Button>
           ) : (
             <>
+              <div className="flex items-center mr-2">
+                <input 
+                  type="checkbox" 
+                  id="liveEdit" 
+                  checked={liveEditMode} 
+                  onChange={(e) => setLiveEditMode(e.target.checked)} 
+                  className="mr-1"
+                />
+                <label htmlFor="liveEdit" className="text-xs">Live</label>
+              </div>
               <Button variant="outline" size="sm" onClick={cancelEdit}>
                 Cancel
               </Button>
