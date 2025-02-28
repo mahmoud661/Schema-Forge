@@ -7,8 +7,11 @@ import { Download, ArrowRight, X, GripVertical } from "lucide-react";
 import { SchemaNode } from "../types";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { validateSqlSyntax } from "./sql-validation";
+import { validateSqlSyntax, fixCommonSqlIssues } from "./sql-validation";
 import { useDebounce } from "use-debounce";
+import CodeMirror from '@uiw/react-codemirror';
+import { sql } from '@codemirror/lang-sql';
+import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 
 interface SqlEditorProps {
   nodes: SchemaNode[];
@@ -23,10 +26,10 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
-  const [editorWidth, setEditorWidth] = useState(320); // Default width
+  const [editorWidth, setEditorWidth] = useState(400); // Increased default width
   const [isDragging, setIsDragging] = useState(false);
   const minWidth = 240; // Minimum width
-  const maxWidth = 600; // Maximum width
+  const maxWidth = 800; // Maximum width
   
   // Handle mouse down on resize handle
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -106,6 +109,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         const targetNode = schemaNodes.find(n => n.id === edge.target);
         
         if (sourceNode && targetNode) {
+          // Extract column names from the handles
           const sourceColumn = edge.sourceHandle?.split('-')[1] || 'id';
           const targetColumn = edge.targetHandle?.split('-')[1] || 'id';
           
@@ -128,7 +132,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   
   // Helper function to properly quote table names with spaces
   const getQuotedTableName = (tableName: string): string => {
-    return tableName.includes(' ') ? `"${tableName}"` : tableName.toLowerCase();
+    return tableName.includes(' ') ? `"${tableName}"` : `"${tableName.toLowerCase()}"`;
   };
   
   const generatePostgresTable = (node: SchemaNode) => {
@@ -137,7 +141,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     
     node.data.schema.forEach((column, index) => {
       // Quote column names if they contain spaces
-      const columnName = column.title.includes(' ') ? `"${column.title}"` : column.title;
+      const columnName = column.title.includes(' ') ? `"${column.title}"` : `"${column.title}"`;
       sql += `  ${columnName} ${column.type}`;
       
       if (column.constraints) {
@@ -163,13 +167,14 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     // Add indexes
     node.data.schema.forEach(column => {
       if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
-        sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${column.title} ON ${node.data.label.toLowerCase()} (${column.title});`;
+        sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase().replace(/\s/g, '_')}_${column.title.replace(/\s/g, '_')} ON ${tableName} (${column.title.includes(' ') ? `"${column.title}"` : `"${column.title}"`});`;
       }
     });
     
     return sql;
   };
   
+  // MySQL and SQLite table generation functions remain similar but with quoting
   const generateMySqlTable = (node: SchemaNode) => {
     const tableName = getQuotedTableName(node.data.label);
     let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
@@ -261,8 +266,6 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     
     return sql;
   };
-  
-  const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s*\(([\s\S]*?)\);/gi;
 
   const handleDownload = () => {
     const blob = new Blob([isEditing ? editableSql : sqlContent], { type: 'text/plain' });
@@ -276,11 +279,89 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Improved SQL parsing function with better regex and error handling
+  const handleApplySqlChangesInternal = (sql: string, isLiveUpdate = false) => {
+    try {
+      setError(null);
+      if (!sql.trim()) {
+        setError("SQL cannot be empty");
+        return;
+      }
+      
+      // Only auto-fix common issues when not in live mode to avoid unnecessary reformatting
+      let processedSql = sql;
+      if (!isLiveUpdate) {
+        // Store original SQL for comparison
+        const originalSql = sql;
+        const fixedSql = fixCommonSqlIssues(sql);
+        
+        if (fixedSql !== originalSql) {
+          console.log("SQL was modified by auto-fix");
+          toast.info("Some SQL syntax issues were automatically fixed");
+          setEditableSql(fixedSql);
+          processedSql = fixedSql;
+        }
+      }
+      
+      // Validate SQL before parsing - but don't block on non-critical errors
+      const validation = validateSqlSyntax(processedSql);
+      if (!validation.isValid) {
+        // Only block on critical errors, warn on others
+        const criticalErrors = validation.errors.filter(err => 
+          err.includes("cannot be empty") || 
+          err.includes("must contain at least one CREATE TABLE")
+        );
+        
+        if (criticalErrors.length > 0) {
+          setError(criticalErrors[0]);
+          return;
+        } else if (!isLiveUpdate) {
+          // Just warn for non-critical errors in manual mode
+          toast.warning("SQL has potential issues but will be processed anyway");
+        }
+      }
+      
+      // Parse SQL to schema - wrap in try/catch to handle parsing errors
+      try {
+        const parsedSchema = parseSqlToSchema(processedSql);
+        if (parsedSchema) {
+          // Log some debug info before updating schema
+          console.log("Parsed schema:", { 
+            tables: parsedSchema.nodes.map(n => n.data.label),
+            edges: parsedSchema.edges.length,
+            sql: processedSql 
+          });
+          
+          // Update the schema with parsed results
+          onUpdateSchema(parsedSchema.nodes, parsedSchema.edges);
+          
+          if (!isLiveUpdate) {
+            setIsEditing(false);
+            toast.success("Schema updated successfully");
+          }
+        }
+      } catch (parseError) {
+        console.error("SQL parsing error:", parseError);
+        setError(`SQL parsing failed: ${parseError.message}`);
+        if (!isLiveUpdate) {
+          toast.error(`Failed to parse SQL: ${parseError.message}`);
+        }
+        return;
+      }
+    } catch (error) {
+      console.error("SQL application error:", error);
+      setError(error.message || "An error occurred while processing SQL");
+      if (!isLiveUpdate) {
+        toast.error("Failed to update schema");
+      }
+    }
+  };
+
+  // Improved SQL parsing function with better regex for edge handling
   const parseSqlToSchema = (sql: string): { nodes: SchemaNode[], edges: any[] } | null => {
     try {
       const newNodes: SchemaNode[] = [];
       const newEdges: any[] = [];
+      const tableMap: Record<string, string> = {}; // Maps table names to node IDs
       
       // Extract CREATE TABLE statements - improved regex to better handle quoted names
       const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
@@ -298,6 +379,13 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         
         if (!tableName || !tableContent) continue;
         
+        // Check for duplicate table names
+        const normalizedName = tableName.toLowerCase();
+        const nodeId = `sql-node-${Date.now()}-${tableIndex}`;
+        
+        // Store table name to node ID mapping
+        tableMap[normalizedName] = nodeId;
+        
         // Process columns
         const columns = [];
         // Split by commas, but be smarter about it to handle cases with commas in type definitions
@@ -306,11 +394,46 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
           .map(line => line.trim())
           .filter(line => line.length > 0);
         
+        // Track column names to prevent duplicates
+        const columnNames = new Set();
+        
+        // Store foreign key constraints to process later
+        const foreignKeys = [];
+        
         for (const columnLine of columnLines) {
-          // Skip constraint lines that don't define columns
-          if (columnLine.toUpperCase().startsWith('CONSTRAINT') || 
-              columnLine.toUpperCase().startsWith('PRIMARY KEY') || 
-              columnLine.toUpperCase().startsWith('FOREIGN KEY')) {
+          // Check for standalone PRIMARY KEY constraint
+          if (columnLine.toUpperCase().includes('PRIMARY KEY')) {
+            const pkMatch = /PRIMARY\s+KEY\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)/i.exec(columnLine);
+            if (pkMatch) {
+              const pkColumnName = pkMatch[1].trim();
+              // Find this column and add primary constraint
+              const existingColumn = columns.find(col => col.title.toLowerCase() === pkColumnName.toLowerCase());
+              if (existingColumn) {
+                if (!existingColumn.constraints) existingColumn.constraints = [];
+                if (!existingColumn.constraints.includes('primary')) {
+                  existingColumn.constraints.push('primary');
+                }
+              }
+              continue;
+            }
+          }
+          
+          // Check for standalone FOREIGN KEY constraint
+          if (columnLine.toUpperCase().includes('FOREIGN KEY')) {
+            // FOREIGN KEY (column_name) REFERENCES table_name(ref_column)
+            const fkMatch = /FOREIGN\s+KEY\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)/i.exec(columnLine);
+            if (fkMatch) {
+              foreignKeys.push({
+                sourceColumn: fkMatch[1].trim(),
+                targetTable: fkMatch[2].trim(),
+                targetColumn: fkMatch[3].trim()
+              });
+              continue;
+            }
+          }
+          
+          // Skip other constraint lines that don't define columns
+          if (columnLine.toUpperCase().startsWith('CONSTRAINT')) {
             continue;
           }
           
@@ -320,14 +443,44 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
           
           if (columnMatch) {
             // Column name can be in any of these capture groups depending on quoting
-            const columnName = columnMatch[1] || columnMatch[2] || columnMatch[3] || columnMatch[4];
-            const columnType = columnMatch[5];
+            let columnName = columnMatch[1] || columnMatch[2] || columnMatch[3] || columnMatch[4];
+            let columnType = columnMatch[5];
             const constraintText = columnMatch[6] || '';
             const constraints = [];
+            
+            // Handle SERIAL type which implies PRIMARY KEY
+            if (columnType.toUpperCase() === 'SERIAL') {
+              columnType = 'int4';
+              constraints.push('primary');
+            }
             
             if (constraintText.toUpperCase().includes('PRIMARY KEY')) constraints.push('primary');
             if (constraintText.toUpperCase().includes('NOT NULL')) constraints.push('notnull');
             if (constraintText.toUpperCase().includes('UNIQUE')) constraints.push('unique');
+            
+            // Check for inline foreign key reference
+            const inlineFkMatch = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)/i.exec(constraintText);
+            if (inlineFkMatch) {
+              foreignKeys.push({
+                sourceColumn: columnName,
+                targetTable: inlineFkMatch[1].trim(),
+                targetColumn: inlineFkMatch[2].trim()
+              });
+            }
+            
+            // Ensure no duplicate column names in same table
+            if (columnNames.has(columnName.toLowerCase())) {
+              // Add suffix to make unique
+              let suffix = 1;
+              let newName = `${columnName}_${suffix}`;
+              while (columnNames.has(newName.toLowerCase())) {
+                suffix++;
+                newName = `${columnName}_${suffix}`;
+              }
+              columnName = newName;
+            }
+            
+            columnNames.add(columnName.toLowerCase());
             
             columns.push({
               title: columnName,
@@ -341,7 +494,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         // Only add the table if we found at least one valid column
         if (columns.length > 0) {
           newNodes.push({
-            id: `sql-node-${Date.now()}-${tableIndex}`,
+            id: nodeId,
             type: 'databaseSchema',
             position: { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 },
             data: {
@@ -349,6 +502,29 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
               schema: columns
             }
           });
+          
+          // Process foreign keys for this table
+          for (const fk of foreignKeys) {
+            const targetNodeId = tableMap[fk.targetTable.toLowerCase()];
+            if (targetNodeId) {
+              const sourceCol = cleanColumnName(fk.sourceColumn);
+              const targetCol = cleanColumnName(fk.targetColumn) || "id";
+              newEdges.push({
+                id: `sql-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                source: nodeId,
+                target: targetNodeId,
+                sourceHandle: `source-${sourceCol}`,
+                targetHandle: `target-${targetCol}`,
+                type: 'smoothstep',
+                animated: true,
+                label: 'references',
+                data: {
+                  relationshipType: 'oneToMany'
+                }
+              });
+            }
+          }
+          
           tableIndex++;
         }
       }
@@ -360,8 +536,9 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         throw new Error("No valid tables found in the SQL. Please check your syntax.");
       }
       
-      // Extract foreign key constraints
-      const fkRegex = /ALTER\s+TABLE\s+["`]?(\w+)["`]?\s+ADD\s+CONSTRAINT\s+\w+\s+FOREIGN\s+KEY\s+\(["`]?(\w+)["`]?\)\s+REFERENCES\s+["`]?(\w+)["`]?\s*\(["`]?(\w+)["`]?\)/gi;
+      // Extract ALTER TABLE foreign key constraints - improved regex to handle more formats
+      // This regex is more permissive to handle different SQL dialects
+      const fkRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"'\s]+)(?:`|"|')?\s+ADD\s+(?:CONSTRAINT\s+(?:\w+)\s+)?FOREIGN\s+KEY\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)/gi;
       
       let fkMatch;
       while ((fkMatch = fkRegex.exec(sql)) !== null) {
@@ -370,14 +547,15 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         const targetTable = fkMatch[3];
         const targetColumn = fkMatch[4];
         
-        const sourceNode = newNodes.find(n => n.data.label.toLowerCase() === sourceTable.toLowerCase());
-        const targetNode = newNodes.find(n => n.data.label.toLowerCase() === targetTable.toLowerCase());
+        // Use the table map to find the node IDs
+        const sourceNodeId = tableMap[sourceTable.toLowerCase()];
+        const targetNodeId = tableMap[targetTable.toLowerCase()];
           
-        if (sourceNode && targetNode) {
+        if (sourceNodeId && targetNodeId) {
           newEdges.push({
             id: `sql-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            source: sourceNode.id,
-            target: targetNode.id,
+            source: sourceNodeId,
+            target: targetNodeId,
             sourceHandle: `source-${sourceColumn}`,
             targetHandle: `target-${targetColumn}`,
             type: 'smoothstep',
@@ -390,13 +568,39 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
         }
       }
       
+      // Process ON DELETE CASCADE and other FK options
+      // Check for foreign keys with ON DELETE CASCADE or similar clauses
+      const onDeleteRegex = /FOREIGN\s+KEY\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\((?:`|"|')?([^`"',\)]+)(?:`|"|')?\)\s+ON\s+DELETE\s+CASCADE/gi;
+      let onDeleteMatch;
+      
+      while ((onDeleteMatch = onDeleteRegex.exec(sql)) !== null) {
+        // If we found an ON DELETE CASCADE clause, update the corresponding edge if it exists
+        const sourceColumn = onDeleteMatch[1].trim();
+        const targetTable = onDeleteMatch[2].trim();
+        
+        // Find the edge that matches this ON DELETE CASCADE clause
+        for (const edge of newEdges) {
+          const sourceHandle = edge.sourceHandle?.split('-')[1];
+          if (sourceHandle === sourceColumn && 
+              edge.target === tableMap[targetTable.toLowerCase()]) {
+            // Add the ON DELETE CASCADE property to the edge data
+            if (!edge.data) edge.data = {};
+            edge.data.onDelete = 'CASCADE';
+            break;
+          }
+        }
+      }
+      
       return { nodes: newNodes, edges: newEdges };
     } catch (error) {
       console.error('Error parsing SQL:', error);
       throw new Error(`Failed to parse SQL: ${error.message}`);
     }
   };
-  
+
+  // Helper to clean column names (remove quotes) and normalize
+  const cleanColumnName = (col: string) => col.replace(/["']/g, '').toLowerCase();
+
   // Helper function to map complex SQL types to our base types
   const mapToBaseType = (sqlType: string): string => {
     const type = sqlType.toLowerCase().split('(')[0].trim();
@@ -411,7 +615,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
       'integer': 'int4',
       'smallint': 'int4',
       'bigint': 'int4',
-      'serial': 'int4',
+      'serial': 'int4', // SERIAL is mapped to int4 with primary key
       'numeric': 'money',
       'decimal': 'money',
       'money': 'money',
@@ -427,37 +631,6 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     };
     
     return typeMap[type] || 'varchar';
-  };
-
-  const handleApplySqlChangesInternal = (sql: string, isLiveUpdate = false) => {
-    try {
-      setError(null);
-      if (!sql.trim()) {
-        setError("SQL cannot be empty");
-        return;
-      }
-      
-      // Validate SQL before parsing
-      const validation = validateSqlSyntax(sql);
-      if (!validation.isValid) {
-        setError(validation.errors[0]);
-        return;
-      }
-      
-      const parsedSchema = parseSqlToSchema(sql);
-      if (parsedSchema) {
-        onUpdateSchema(parsedSchema.nodes, parsedSchema.edges);
-        if (!isLiveUpdate) {
-          setIsEditing(false);
-          toast.success("Schema updated successfully");
-        }
-      }
-    } catch (error) {
-      setError(error.message || "An error occurred while parsing SQL");
-      if (!isLiveUpdate) {
-        toast.error("Failed to update schema");
-      }
-    }
   };
 
   const handleApplySqlChanges = () => {
@@ -507,7 +680,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
                 <Button variant="outline" size="sm" onClick={cancelEdit}>
                   Cancel
                 </Button>
-                <Button variant="primary" size="sm" onClick={handleApplySqlChanges}>
+                <Button size="sm" onClick={handleApplySqlChanges}>
                   Apply
                 </Button>
               </>
@@ -524,17 +697,50 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
           </div>
         )}
         
-        <div className="flex-1 overflow-auto p-4 bg-muted/30">
+        <div className="flex-1 overflow-auto bg-muted/30">
           {isEditing ? (
-            <Textarea
+            <CodeMirror
               value={editableSql}
-              onChange={(e) => setEditableSql(e.target.value)}
-              className="font-mono text-sm h-full min-h-[500px] resize-none bg-background p-4 rounded-md shadow-sm border"
+              onChange={setEditableSql}
+              height="100%"
+              theme={vscodeDark}
+              extensions={[sql()]}
+              basicSetup={{
+                lineNumbers: true,
+                highlightActiveLineGutter: true,
+                highlightSpecialChars: true,
+                foldGutter: true,
+                dropCursor: true,
+                allowMultipleSelections: true,
+                indentOnInput: true,
+                syntaxHighlighting: true,
+                bracketMatching: true,
+                closeBrackets: true,
+                autocompletion: true,
+                rectangularSelection: true,
+                crosshairCursor: true,
+                highlightSelectionMatches: true,
+                indentUnit: 2,
+              }}
+              className="h-full min-h-[500px]"
             />
           ) : (
-            <pre className="font-mono text-sm whitespace-pre-wrap bg-background p-4 rounded-md shadow-sm border">
-              {sqlContent}
-            </pre>
+            <CodeMirror
+              value={sqlContent}
+              readOnly={true}
+              height="100%"
+              theme={vscodeDark}
+              extensions={[sql()]}
+              basicSetup={{
+                lineNumbers: true,
+                highlightActiveLineGutter: false,
+                highlightSpecialChars: true,
+                foldGutter: true,
+                syntaxHighlighting: true,
+                bracketMatching: true,
+              }}
+              className="h-full min-h-[500px]"
+            />
           )}
         </div>
       </div>

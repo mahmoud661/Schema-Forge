@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, KeyRound, Hash, Type, Plus, Trash2, GripVertical } from "lucide-react";
 import { SchemaNode, SchemaNodeData } from "@/app/schemas/editor/[id]/types";
+import { createUniqueName } from "@/app/schemas/editor/[id]/components/sql-validation";
 
 interface SidebarProps {
   selectedNode: SchemaNode | null;
   onUpdateNode: (data: Partial<SchemaNodeData>) => void;
+  nodes: SchemaNode[]; // Added to check for duplicate names
 }
 
 const dataTypes = [
@@ -35,7 +37,7 @@ const constraints = [
   { id: "index", label: "Index" },
 ];
 
-export function Sidebar({ selectedNode, onUpdateNode }: SidebarProps) {
+export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
   const [draggedType, setDraggedType] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320); // Default width (80 in rem)
   const [isDragging, setIsDragging] = useState(false);
