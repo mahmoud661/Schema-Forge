@@ -80,9 +80,10 @@ export function BaseSidebar({
   }, [isDragging, minWidth, maxWidth, onWidthChange]);
 
   return (
-    <div className="flex relative" style={{ width: `${sidebarWidth}px` }}>
+    // Add max-h-screen and overflow-y-auto to make the sidebar scrollable
+    <div className="flex relative max-h-screen overflow-y-auto" style={{ width: `${sidebarWidth}px` }}>
       <div className={cn(
-        "flex-1 bg-background flex flex-col h-full overflow-hidden",
+        "flex-1 bg-background flex flex-col h-full overflow-auto",
         bordered && "border-r",
         className
       )}>

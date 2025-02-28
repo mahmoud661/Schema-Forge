@@ -2,6 +2,10 @@ import { useCallback, useRef, useState, useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { SchemaNode, SchemaNodeData } from "../types";
 
+function generateId() {
+  return Date.now().toString();
+}
+
 export function useSchemaNodes() {
   const [selectedNode, setSelectedNode] = useState<SchemaNode | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -17,7 +21,7 @@ export function useSchemaNodes() {
   }, []);
 
   const onDrop = useCallback(
-    (event: React.DragEvent, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
+    (event: React.DragEvent, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>, nodes: SchemaNode[]) => {
       event.preventDefault();
 
       if (!reactFlowWrapper.current) return;
@@ -30,12 +34,15 @@ export function useSchemaNodes() {
         y: event.clientY,
       });
 
+      const baseLabel = "New Table";
+      const label = getUniqueLabel(baseLabel, nodes);
+
       const newNode = {
-        id: `${type}-${Date.now()}`,
+        id: generateId(),
         type: 'databaseSchema',
         position,
         data: {
-          label: 'New Table',
+          label,
           schema: [
             { 
               title: "id", 
@@ -55,6 +62,17 @@ export function useSchemaNodes() {
     },
     [screenToFlowPosition]
   );
+
+  const getUniqueLabel = (baseLabel: string, nodes: SchemaNode[]) => {
+    let label = baseLabel;
+    let count = 1;
+    const existingLabels = nodes.map((node) => node.data.label);
+    while (existingLabels.includes(label)) {
+      label = `${baseLabel}_${count}`;
+      count++;
+    }
+    return label;
+  };
 
   const updateNodeData = useCallback((node: SchemaNode, nodeData: Partial<SchemaNodeData>, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
     // Create an updated node with the new data

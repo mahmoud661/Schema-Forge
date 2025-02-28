@@ -195,7 +195,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
       headerClassName="p-4 flex-col gap-3 sm:flex-row"
     >
       {error && (
-        <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive">
+        <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive overflow-scroll">
           {error}
         </div>
       )}

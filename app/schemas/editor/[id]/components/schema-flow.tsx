@@ -124,7 +124,7 @@ export function SchemaFlow() {
             nodeTypes={nodeTypes}
             fitView
             onDragOver={onDragOver}
-            onDrop={(event) => onDrop(event, setNodes)}
+            onDrop={(event) => onDrop(event, setNodes, nodes)}
             className="bg-muted/30"
             style={{ width: '100%', height: '100%' }}
             connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
