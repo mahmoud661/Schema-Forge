@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight, Database, Search, Users } from "lucide-react";
-
+import { Navigation } from "@/components/navigation";
 export default function Home() {
   return (
+    <><Navigation/>
     <div className="flex min-h-[calc(100vh-4rem)] flex-col">
       <main className="flex-1">
         <section className="relative hero-gradient space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32">
@@ -72,6 +73,6 @@ export default function Home() {
           </div>
         </section>
       </main>
-    </div>
+    </div></>
   );
 }

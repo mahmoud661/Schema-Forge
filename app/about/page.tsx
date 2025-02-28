@@ -1,5 +1,7 @@
+import { Navigation } from "@/components/navigation";
+
 export default function About() {
-  return (
+  return (<><Navigation/>
     <div className="min-h-[calc(100vh-4rem)] gradient-bg">
       <div className="container py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto bg-gradient-to-b from-background to-background/80 rounded-2xl p-8 shadow-lg">
@@ -60,6 +62,6 @@ export default function About() {
           </div>
         </div>
       </div>
-    </div>
+    </div></>
   );
 }

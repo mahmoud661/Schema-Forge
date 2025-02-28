@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Database, ShoppingCart, BookOpen, Package, Plus, Search, Filter, Calendar, ArrowUpDown } from "lucide-react";
 import { useSchemaStore } from "@/lib/store";
 import { motion } from "framer-motion";
+import { Navigation } from "@/components/navigation";
 
 export default function Browse() {
   const { schemas, addSchema } = useSchemaStore();
@@ -130,7 +131,7 @@ export default function Browse() {
     }).format(date);
   };
 
-  return (
+  return (<><Navigation />
     <div className="min-h-[calc(100vh-4rem)] gradient-bg">
       <div className="container py-10 px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-8">
@@ -372,6 +373,6 @@ export default function Browse() {
           </div>
         </div>
       </div>
-    </div>
+    </div></>
   );
 }

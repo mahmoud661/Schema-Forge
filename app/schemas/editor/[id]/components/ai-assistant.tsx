@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Bot, Sparkles, Copy, Check, Code } from "lucide-react";
+import { Send, Bot, Sparkles, Copy, Check, Code, GripVertical } from "lucide-react";
 import { SchemaNode } from "../types";
 
 interface AiAssistantProps {
@@ -33,6 +33,42 @@ export function AiAssistant({ nodes, edges, onApplySuggestion }: AiAssistantProp
   const [isLoading, setIsLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentSchema, setCurrentSchema] = useState({ nodes, edges });
+  const [assistantWidth, setAssistantWidth] = useState(320); // Default width
+  const [isDragging, setIsDragging] = useState(false);
+  const minWidth = 240; // Minimum width
+  const maxWidth = 600; // Maximum width
+  
+  // Handle mouse down on resize handle
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  
+  // Handle mouse move for resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      const newWidth = e.clientX;
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setAssistantWidth(newWidth);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+    
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   // Update current schema when props change
   useEffect(() => {
@@ -301,116 +337,128 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
   };
 
   return (
-    <div className="w-80 border-r bg-background h-full flex flex-col">
-      <div className="p-4 border-b">
-        <h3 className="font-semibold">AI Assistant</h3>
-      </div>
-      
-      <div className="flex-1 overflow-auto p-4">
-        <div className="space-y-4">
-          {messages.map((message, index) => (
-            <div 
-              key={index} 
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+    <div className="flex relative" style={{ width: `${assistantWidth}px` }}>
+      <div className="flex-1 border-r bg-background h-full flex flex-col">
+        <div className="p-4 border-b">
+          <h3 className="font-semibold">AI Assistant</h3>
+        </div>
+        
+        <div className="flex-1 overflow-auto p-4">
+          <div className="space-y-4">
+            {messages.map((message, index) => (
               <div 
-                className={`max-w-[95%] rounded-lg p-3 ${
-                  message.role === 'user' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'bg-muted'
-                }`}
+                key={index} 
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {message.role === 'assistant' && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <Bot className="h-4 w-4" />
-                    <span className="font-semibold text-sm">AI Assistant</span>
-                  </div>
-                )}
-                <p className="whitespace-pre-wrap text-sm">{message.content}</p>
-                
-                {message.suggestion?.sql && (
-                  <div className="mt-3 bg-background/80 p-2 rounded-md border text-xs">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1">
-                        <Code className="h-3 w-3" />
-                        <span className="font-medium text-xs">SQL</span>
+                <div 
+                  className={`max-w-[95%] rounded-lg p-3 ${
+                    message.role === 'user' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}
+                >
+                  {message.role === 'assistant' && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bot className="h-4 w-4" />
+                      <span className="font-semibold text-sm">AI Assistant</span>
+                    </div>
+                  )}
+                  <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                  
+                  {message.suggestion?.sql && (
+                    <div className="mt-3 bg-background/80 p-2 rounded-md border text-xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1">
+                          <Code className="h-3 w-3" />
+                          <span className="font-medium text-xs">SQL</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 text-xs"
+                          onClick={() => handleCopyToClipboard(message.suggestion?.sql || '', -index)}
+                        >
+                          {copiedIndex === -index ? (
+                            <Check className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Copy className="h-3 w-3 mr-1" />
+                          )}
+                          {copiedIndex === -index ? 'Copied' : 'Copy'}
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
+                      <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+                        {message.suggestion.sql}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {message.suggestion?.nodes && (
+                    <div className="mt-2">
+                      <Button 
+                        variant="secondary" 
                         size="sm"
-                        className="h-5 text-xs"
-                        onClick={() => handleCopyToClipboard(message.suggestion?.sql || '', -index)}
+                        className="gap-1 text-xs"
+                        onClick={() => handleApplySuggestion(message.suggestion)}
                       >
-                        {copiedIndex === -index ? (
-                          <Check className="h-3 w-3 mr-1" />
-                        ) : (
-                          <Copy className="h-3 w-3 mr-1" />
-                        )}
-                        {copiedIndex === -index ? 'Copied' : 'Copy'}
+                        <Sparkles className="h-3 w-3" />
+                        Apply Suggestion
                       </Button>
                     </div>
-                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
-                      {message.suggestion.sql}
-                    </pre>
-                  </div>
-                )}
-                
-                {message.suggestion?.nodes && (
-                  <div className="mt-2">
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      className="gap-1 text-xs"
-                      onClick={() => handleApplySuggestion(message.suggestion)}
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      Apply Suggestion
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-[95%] rounded-lg p-3 bg-muted">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-4 w-4" />
-                  <div className="flex gap-1">
-                    <span className="animate-bounce">.</span>
-                    <span className="animate-bounce delay-100">.</span>
-                    <span className="animate-bounce delay-200">.</span>
+            ))}
+            
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[95%] rounded-lg p-3 bg-muted">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4" />
+                    <div className="flex gap-1">
+                      <span className="animate-bounce">.</span>
+                      <span className="animate-bounce delay-100">.</span>
+                      <span className="animate-bounce delay-200">.</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+        
+        <div className="p-3 border-t">
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="Ask for help with your schema..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="resize-none text-sm h-20"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendPrompt();
+                }
+              }}
+            />
+            <Button 
+              onClick={handleSendPrompt} 
+              disabled={isLoading || !prompt.trim()}
+              size="sm"
+              className="self-end"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
       
-      <div className="p-3 border-t">
-        <div className="flex gap-2">
-          <Textarea
-            placeholder="Ask for help with your schema..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            className="resize-none text-sm h-20"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendPrompt();
-              }
-            }}
-          />
-          <Button 
-            onClick={handleSendPrompt} 
-            disabled={isLoading || !prompt.trim()}
-            size="sm"
-            className="self-end"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+      {/* Resize handle */}
+      <div 
+        className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-50">
+          <GripVertical className="h-5 w-5" />
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download, ArrowRight, X } from "lucide-react";
+import { Download, ArrowRight, X, GripVertical } from "lucide-react";
 import { SchemaNode } from "../types";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -23,6 +23,42 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
+  const [editorWidth, setEditorWidth] = useState(320); // Default width
+  const [isDragging, setIsDragging] = useState(false);
+  const minWidth = 240; // Minimum width
+  const maxWidth = 600; // Maximum width
+  
+  // Handle mouse down on resize handle
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  
+  // Handle mouse move for resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      const newWidth = e.clientX;
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setEditorWidth(newWidth);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+    
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
   
   // Debounce the SQL changes for live updates
   const [debouncedSql] = useDebounce(editableSql, 1000);
@@ -435,70 +471,82 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   };
 
   return (
-    <div className="w-80 border-r bg-background flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b flex justify-between items-center">
-        <h3 className="font-semibold">SQL Editor</h3>
-      </div>
-      <div className="p-4 border-b flex justify-between items-center">
-        <Select value={dbType} onValueChange={setDbType}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Database Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="postgresql">PostgreSQL</SelectItem>
-            <SelectItem value="mysql">MySQL</SelectItem>
-            <SelectItem value="sqlite">SQLite</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex gap-2">
-          {!isEditing ? (
-            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-              Edit
+    <div className="flex relative" style={{ width: `${editorWidth}px` }}>
+      <div className="flex-1 border-r bg-background flex flex-col h-full overflow-hidden">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="font-semibold">SQL Editor</h3>
+        </div>
+        <div className="p-4 border-b flex justify-between items-center">
+          <Select value={dbType} onValueChange={setDbType}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Database Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="postgresql">PostgreSQL</SelectItem>
+              <SelectItem value="mysql">MySQL</SelectItem>
+              <SelectItem value="sqlite">SQLite</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            {!isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                Edit
+              </Button>
+            ) : (
+              <>
+                <div className="flex items-center mr-2">
+                  <input 
+                    type="checkbox" 
+                    id="liveEdit" 
+                    checked={liveEditMode} 
+                    onChange={(e) => setLiveEditMode(e.target.checked)} 
+                    className="mr-1"
+                  />
+                  <label htmlFor="liveEdit" className="text-xs">Live</label>
+                </div>
+                <Button variant="outline" size="sm" onClick={cancelEdit}>
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleApplySqlChanges}>
+                  Apply
+                </Button>
+              </>
+            )}
+            <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Download className="h-4 w-4" />
             </Button>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive">
+            {error}
+          </div>
+        )}
+        
+        <div className="flex-1 overflow-auto p-4 bg-muted/30">
+          {isEditing ? (
+            <Textarea
+              value={editableSql}
+              onChange={(e) => setEditableSql(e.target.value)}
+              className="font-mono text-sm h-full min-h-[500px] resize-none bg-background p-4 rounded-md shadow-sm border"
+            />
           ) : (
-            <>
-              <div className="flex items-center mr-2">
-                <input 
-                  type="checkbox" 
-                  id="liveEdit" 
-                  checked={liveEditMode} 
-                  onChange={(e) => setLiveEditMode(e.target.checked)} 
-                  className="mr-1"
-                />
-                <label htmlFor="liveEdit" className="text-xs">Live</label>
-              </div>
-              <Button variant="outline" size="sm" onClick={cancelEdit}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" onClick={handleApplySqlChanges}>
-                Apply
-              </Button>
-            </>
+            <pre className="font-mono text-sm whitespace-pre-wrap bg-background p-4 rounded-md shadow-sm border">
+              {sqlContent}
+            </pre>
           )}
-          <Button variant="outline" size="sm" onClick={handleDownload}>
-            <Download className="h-4 w-4" />
-          </Button>
         </div>
       </div>
       
-      {error && (
-        <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive">
-          {error}
+      {/* Resize handle */}
+      <div 
+        className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-50">
+          <GripVertical className="h-5 w-5" />
         </div>
-      )}
-      
-      <div className="flex-1 overflow-auto p-4 bg-muted/30">
-        {isEditing ? (
-          <Textarea
-            value={editableSql}
-            onChange={(e) => setEditableSql(e.target.value)}
-            className="font-mono text-sm h-full min-h-[500px] resize-none bg-background p-4 rounded-md shadow-sm border"
-          />
-        ) : (
-          <pre className="font-mono text-sm whitespace-pre-wrap bg-background p-4 rounded-md shadow-sm border">
-            {sqlContent}
-          </pre>
-        )}
       </div>
     </div>
   );
