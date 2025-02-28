@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download, ArrowRight, X, GripVertical } from "lucide-react";
+import { Download, ArrowRight, X } from "lucide-react";
 import { SchemaNode } from "../types";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { validateSqlSyntax, fixCommonSqlIssues } from "./sql-validation";
 import { useDebounce } from "use-debounce";
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
+import { BaseSidebar } from "@/components/ui/sidebar";
+import { useSidebarStore } from "../store/sidebar-store";
 
 interface SqlEditorProps {
   nodes: SchemaNode[];
@@ -26,42 +27,7 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
-  const [editorWidth, setEditorWidth] = useState(400); // Increased default width
-  const [isDragging, setIsDragging] = useState(false);
-  const minWidth = 240; // Minimum width
-  const maxWidth = 800; // Maximum width
-  
-  // Handle mouse down on resize handle
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  
-  // Handle mouse move for resizing
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      
-      const newWidth = e.clientX;
-      if (newWidth >= minWidth && newWidth <= maxWidth) {
-        setEditorWidth(newWidth);
-      }
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-    
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
+  const { widths, updateWidth } = useSidebarStore();
   
   // Debounce the SQL changes for live updates
   const [debouncedSql] = useDebounce(editableSql, 1000);
@@ -643,117 +609,112 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     setError(null);
   };
 
-  return (
-    <div className="flex relative" style={{ width: `${editorWidth}px` }}>
-      <div className="flex-1 border-r bg-background flex flex-col h-full overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h3 className="font-semibold">SQL Editor</h3>
-        </div>
-        <div className="p-4 border-b flex justify-between items-center">
-          <Select value={dbType} onValueChange={setDbType}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Database Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="postgresql">PostgreSQL</SelectItem>
-              <SelectItem value="mysql">MySQL</SelectItem>
-              <SelectItem value="sqlite">SQLite</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
-            {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                Edit
-              </Button>
-            ) : (
-              <>
-                <div className="flex items-center mr-2">
-                  <input 
-                    type="checkbox" 
-                    id="liveEdit" 
-                    checked={liveEditMode} 
-                    onChange={(e) => setLiveEditMode(e.target.checked)} 
-                    className="mr-1"
-                  />
-                  <label htmlFor="liveEdit" className="text-xs">Live</label>
-                </div>
-                <Button variant="outline" size="sm" onClick={cancelEdit}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleApplySqlChanges}>
-                  Apply
-                </Button>
-              </>
-            )}
-            <Button variant="outline" size="sm" onClick={handleDownload}>
-              <Download className="h-4 w-4" />
+  // Header actions for the BaseSidebar
+  const headerActions = (
+    <>
+      <Select value={dbType} onValueChange={setDbType}>
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Database Type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="postgresql">PostgreSQL</SelectItem>
+          <SelectItem value="mysql">MySQL</SelectItem>
+          <SelectItem value="sqlite">SQLite</SelectItem>
+        </SelectContent>
+      </Select>
+      <div className="flex gap-2">
+        {!isEditing ? (
+          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+            Edit
+          </Button>
+        ) : (
+          <>
+            <div className="flex items-center mr-2">
+              <input 
+                type="checkbox" 
+                id="liveEdit" 
+                checked={liveEditMode} 
+                onChange={(e) => setLiveEditMode(e.target.checked)} 
+                className="mr-1"
+              />
+              <label htmlFor="liveEdit" className="text-xs">Live</label>
+            </div>
+            <Button variant="outline" size="sm" onClick={cancelEdit}>
+              Cancel
             </Button>
-          </div>
-        </div>
-        
-        {error && (
-          <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive">
-            {error}
-          </div>
+            <Button size="sm" onClick={handleApplySqlChanges}>
+              Apply
+            </Button>
+          </>
         )}
-        
-        <div className="flex-1 overflow-auto bg-muted/30">
-          {isEditing ? (
-            <CodeMirror
-              value={editableSql}
-              onChange={setEditableSql}
-              height="100%"
-              theme={vscodeDark}
-              extensions={[sql()]}
-              basicSetup={{
-                lineNumbers: true,
-                highlightActiveLineGutter: true,
-                highlightSpecialChars: true,
-                foldGutter: true,
-                dropCursor: true,
-                allowMultipleSelections: true,
-                indentOnInput: true,
-                syntaxHighlighting: true,
-                bracketMatching: true,
-                closeBrackets: true,
-                autocompletion: true,
-                rectangularSelection: true,
-                crosshairCursor: true,
-                highlightSelectionMatches: true,
-                indentUnit: 2,
-              }}
-              className="h-full min-h-[500px]"
-            />
-          ) : (
-            <CodeMirror
-              value={sqlContent}
-              readOnly={true}
-              height="100%"
-              theme={vscodeDark}
-              extensions={[sql()]}
-              basicSetup={{
-                lineNumbers: true,
-                highlightActiveLineGutter: false,
-                highlightSpecialChars: true,
-                foldGutter: true,
-                syntaxHighlighting: true,
-                bracketMatching: true,
-              }}
-              className="h-full min-h-[500px]"
-            />
-          )}
-        </div>
+        <Button variant="outline" size="sm" onClick={handleDownload}>
+          <Download className="h-4 w-4" />
+        </Button>
       </div>
+    </>
+  );
+
+  return (
+    <BaseSidebar 
+      title="SQL Editor"
+      width={widths.sql}
+      onWidthChange={(width) => updateWidth('sql', width)}
+      maxWidth={800}
+      headerActions={headerActions}
+      headerClassName="p-4 flex-col gap-3 sm:flex-row"
+    >
+      {error && (
+        <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive">
+          {error}
+        </div>
+      )}
       
-      {/* Resize handle */}
-      <div 
-        className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
-        onMouseDown={handleMouseDown}
-      >
-        <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-50">
-          <GripVertical className="h-5 w-5" />
-        </div>
+      <div className="flex-1 h-full bg-muted/30">
+        {isEditing ? (
+          <CodeMirror
+            value={editableSql}
+            onChange={setEditableSql}
+            height="100%"
+            theme={vscodeDark}
+            extensions={[sql()]}
+            basicSetup={{
+              lineNumbers: true,
+              highlightActiveLineGutter: true,
+              highlightSpecialChars: true,
+              foldGutter: true,
+              dropCursor: true,
+              allowMultipleSelections: true,
+              indentOnInput: true,
+              syntaxHighlighting: true,
+              bracketMatching: true,
+              closeBrackets: true,
+              autocompletion: true,
+              rectangularSelection: true,
+              crosshairCursor: true,
+              highlightSelectionMatches: true,
+              indentUnit: 2,
+            }}
+            className="h-full min-h-[500px]"
+          />
+        ) : (
+          <CodeMirror
+            value={sqlContent}
+            readOnly={true}
+            height="100%"
+            theme={vscodeDark}
+            extensions={[sql()]}
+            basicSetup={{
+              lineNumbers: true,
+              highlightActiveLineGutter: false,
+              highlightSpecialChars: true,
+              foldGutter: true,
+              syntaxHighlighting: true,
+              bracketMatching: true,
+            }}
+            className="h-full min-h-[500px]"
+          />
+        )}
       </div>
-    </div>
+    </BaseSidebar>
   );
 }

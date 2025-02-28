@@ -1,13 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Edge } from "@xyflow/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { X } from "lucide-react";
+import { BaseSidebar } from "@/components/ui/sidebar";
+import { useSidebarStore } from "../store/sidebar-store";
 
 interface EdgeSidebarProps {
   selectedEdge: Edge | null;
@@ -17,29 +18,63 @@ interface EdgeSidebarProps {
 
 export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebarProps) {
   if (!selectedEdge) return null;
+  
+  const { widths, updateWidth } = useSidebarStore();
+  
+  // Local state for color to avoid excessive edge updates
+  const [localColor, setLocalColor] = useState<string>(
+    (selectedEdge.style?.stroke as string) || '#3b82f6'
+  );
+  
+  // Update local color when selected edge changes
+  useEffect(() => {
+    setLocalColor((selectedEdge.style?.stroke as string) || '#3b82f6');
+  }, [selectedEdge.id, selectedEdge.style?.stroke]);
+  
+  // Get current stroke width safely
+  const currentStrokeWidth = selectedEdge.style?.strokeWidth as number || 2;
 
-  const handleLabelChange = (value: string) => {
+  // Memoize the handlers to prevent unnecessary re-renders
+  const handleLabelChange = useCallback((value: string) => {
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
       label: value,
     });
-  };
+  }, [selectedEdge, onUpdateEdge]);
 
-  const handleTypeChange = (value: string) => {
+  const handleTypeChange = useCallback((value: string) => {
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
       type: value,
     });
-  };
+  }, [selectedEdge, onUpdateEdge]);
 
-  const handleAnimatedChange = (value: boolean) => {
+  const handleAnimatedChange = useCallback((value: boolean) => {
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
       animated: value,
     });
-  };
+  }, [selectedEdge, onUpdateEdge]);
 
-  const handleStyleChange = (property: string, value: string) => {
+  // Handle color change without updating the edge (just local state)
+  const handleColorChange = useCallback((value: string) => {
+    setLocalColor(value);
+  }, []);
+  
+  // Only update the edge style when the interaction ends
+  const handleColorComplete = useCallback(() => {
+    const currentStyle = selectedEdge.style || {};
+    onUpdateEdge(selectedEdge.id, {
+      ...selectedEdge,
+      style: {
+        ...currentStyle,
+        stroke: localColor,
+      },
+    });
+  }, [selectedEdge, onUpdateEdge, localColor]);
+  
+  // For other style properties
+  const handleStyleChange = useCallback((property: string, value: string | number) => {
     const currentStyle = selectedEdge.style || {};
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
@@ -48,18 +83,33 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
         [property]: value,
       },
     });
-  };
+  }, [selectedEdge, onUpdateEdge]);
+  
+  // For typing in a color directly (not dragging)
+  const handleManualColorInput = useCallback((value: string) => {
+    setLocalColor(value);
+    // Use a small timeout to reduce updates
+    setTimeout(() => {
+      const currentStyle = selectedEdge.style || {};
+      onUpdateEdge(selectedEdge.id, {
+        ...selectedEdge,
+        style: {
+          ...currentStyle,
+          stroke: value,
+        },
+      });
+    }, 300);
+  }, [selectedEdge, onUpdateEdge]);
 
   return (
-    <div className="w-80 border-l bg-background p-4 flex flex-col gap-4 overflow-y-auto h-full">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Edge Properties</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="space-y-4">
+    <BaseSidebar 
+      title="Edge Properties" 
+      onClose={onClose}
+      width={widths.edge}
+      onWidthChange={(width) => updateWidth("edge", width)}
+      showClose={true}
+    >
+      <div className="p-4 space-y-4">
         <div className="space-y-2">
           <Label>Relationship Label</Label>
           <Input 
@@ -101,13 +151,14 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
           <div className="flex gap-2">
             <Input 
               type="color"
-              value={(selectedEdge.style?.stroke as string) || '#3b82f6'}
-              onChange={(e) => handleStyleChange('stroke', e.target.value)}
+              value={localColor}
+              onChange={(e) => handleColorChange(e.target.value)}
+              onBlur={handleColorComplete}
               className="w-12 h-10 p-1"
             />
             <Input 
-              value={(selectedEdge.style?.stroke as string) || '#3b82f6'}
-              onChange={(e) => handleStyleChange('stroke', e.target.value)}
+              value={localColor}
+              onChange={(e) => handleManualColorInput(e.target.value)}
               placeholder="#3b82f6"
             />
           </div>
@@ -119,7 +170,7 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
             type="number"
             min="1"
             max="10"
-            value={(selectedEdge.style?.strokeWidth as number) || 2}
+            value={currentStrokeWidth}
             onChange={(e) => handleStyleChange('strokeWidth', e.target.value)}
           />
         </div>
@@ -145,6 +196,6 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
           </Select>
         </div>
       </div>
-    </div>
+    </BaseSidebar>
   );
 }

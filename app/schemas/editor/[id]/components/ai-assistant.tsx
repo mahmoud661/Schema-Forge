@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Bot, Sparkles, Copy, Check, Code, GripVertical } from "lucide-react";
+import { Send, Bot, Sparkles, Copy, Check, Code } from "lucide-react";
 import { SchemaNode } from "../types";
+import { BaseSidebar } from "@/components/ui/sidebar";
+import { useSidebarStore } from "../store/sidebar-store";
 
 interface AiAssistantProps {
   nodes: SchemaNode[];
@@ -33,42 +35,7 @@ export function AiAssistant({ nodes, edges, onApplySuggestion }: AiAssistantProp
   const [isLoading, setIsLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentSchema, setCurrentSchema] = useState({ nodes, edges });
-  const [assistantWidth, setAssistantWidth] = useState(320); // Default width
-  const [isDragging, setIsDragging] = useState(false);
-  const minWidth = 240; // Minimum width
-  const maxWidth = 600; // Maximum width
-  
-  // Handle mouse down on resize handle
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  
-  // Handle mouse move for resizing
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      
-      const newWidth = e.clientX;
-      if (newWidth >= minWidth && newWidth <= maxWidth) {
-        setAssistantWidth(newWidth);
-      }
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-    
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
+  const { widths, updateWidth } = useSidebarStore();
 
   // Update current schema when props change
   useEffect(() => {
@@ -337,12 +304,12 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
   };
 
   return (
-    <div className="flex relative" style={{ width: `${assistantWidth}px` }}>
-      <div className="flex-1 border-r bg-background h-full flex flex-col">
-        <div className="p-4 border-b">
-          <h3 className="font-semibold">AI Assistant</h3>
-        </div>
-        
+    <BaseSidebar 
+      title="AI Assistant" 
+      width={widths.ai}
+      onWidthChange={(width) => updateWidth('ai', width)}
+    >
+      <div className="flex flex-col h-full">
         <div className="flex-1 overflow-auto p-4">
           <div className="space-y-4">
             {messages.map((message, index) => (
@@ -451,16 +418,6 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
           </div>
         </div>
       </div>
-      
-      {/* Resize handle */}
-      <div 
-        className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
-        onMouseDown={handleMouseDown}
-      >
-        <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-50">
-          <GripVertical className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
+    </BaseSidebar>
   );
 }
