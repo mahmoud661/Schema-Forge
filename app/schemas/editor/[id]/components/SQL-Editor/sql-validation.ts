@@ -207,9 +207,9 @@ export function fixCommonSqlIssues(sql: string): string {
   const missingCloseQuoteRegex = /\("(\w+)(?!")(\s+\w+)/g;
   fixedSql = fixedSql.replace(missingCloseQuoteRegex, '("$1"$2');
   
-  // Ensure proper PRIMARY KEY syntax
-  const improperPkRegex = /PRIMARY KEY\s+(\w+)/gi;
-  fixedSql = fixedSql.replace(improperPkRegex, 'PRIMARY KEY ($1)');
+  // Removed replacement for improper PRIMARY KEY syntax to preserve inline definitions
+  // const improperPkRegex = /PRIMARY KEY\s+(\w+)/gi;
+  // fixedSql = fixedSql.replace(improperPkRegex, 'PRIMARY KEY ($1)');
   
   // Ensure FOREIGN KEY constraints have proper syntax
   const improperFkRegex = /FOREIGN KEY\s+(\w+)/gi;
