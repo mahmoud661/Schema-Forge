@@ -3,7 +3,6 @@ import { ReactFlow, Node, Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@/lib/schema-flow-styles.css";
 import { Toaster } from "sonner";
-
 import SchemaNode from "@/components/schema-node";
 import { Sidebar } from "@/components/schema-sidebar";
 import { EdgeSidebar } from "./edge-sidebar";
@@ -13,6 +12,7 @@ import { SqlEditor } from "./sql-editor";
 import { AiAssistant } from "./ai-assistant";
 import { useSchemaFlow } from "../hooks/use-schema-flow";
 import { useSchemaNodes } from "../hooks/use-schema-nodes";
+
 const nodeTypes = {
   databaseSchema: SchemaNode,
 };
@@ -51,42 +51,6 @@ export function SchemaFlow() {
     setEdges(newEdges as any);
   };
 
-  // Render the appropriate sidebar content based on the active tab
-  const renderSidebar = () => {
-    switch (activeTab) {
-      case "visual":
-        return (
-          <Sidebar 
-            selectedNode={selectedNode}
-            onUpdateNode={(nodeData) => {
-              if (selectedNode) {
-                updateNodeData(selectedNode, nodeData, setNodes as any);
-              }
-            }}
-            nodes={nodes as any}
-          />
-        );
-      case "sql":
-        return (
-          <SqlEditor 
-            nodes={nodes as any} 
-            edges={edges} 
-            onUpdateSchema={handleUpdateSchema}
-          />
-        );
-      case "ai":
-        return (
-          <AiAssistant 
-            nodes={nodes as any} 
-            edges={edges} 
-            onApplySuggestion={handleUpdateSchema} 
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="h-screen w-full flex flex-col">
       <Toaster position="top-right" />
@@ -99,8 +63,41 @@ export function SchemaFlow() {
       />
       
       <div ref={reactFlowWrapper} className="flex-1 flex">
-        {/* Sidebar content changes based on active tab */}
-        {renderSidebar()}
+        {/* Sidebar container with all panels rendered always */}
+        <div className="sidebar">
+          <div className={activeTab !== "visual" ? "hidden" : ""}>
+            <Sidebar 
+              selectedNode={selectedNode}
+              onUpdateNode={(nodeData) => {
+                if (selectedNode) {
+                  updateNodeData(selectedNode, nodeData, setNodes as any);
+                }
+              }}
+              nodes={nodes as any}
+            />
+          </div>
+          <div className={activeTab !== "sql" ? "hidden" : ""}>
+            <SqlEditor 
+              nodes={nodes as any} 
+              edges={edges} 
+              onUpdateSchema={(newNodes, newEdges) => {
+                // Use any to bypass type checking since we're crossing incompatible type systems
+                setNodes([newNodes as any]);
+                setEdges(newEdges as any);
+              }}
+            />
+          </div>
+          <div className={activeTab !== "ai" ? "hidden" : ""}>
+            <AiAssistant 
+              nodes={nodes as any} 
+              edges={edges} 
+              onApplySuggestion={(newNodes, newEdges) => {
+                setNodes([newNodes as any]);
+                setEdges(newEdges as any);
+              }} 
+            />
+          </div>
+        </div>
         
         {/* Flow diagram is always visible */}
         <div className="flex-1 relative" style={{ height: '100%', width: '100%' }}>
@@ -113,7 +110,6 @@ export function SchemaFlow() {
             onNodeClick={onNodeClick}
             onNodesDelete={onNodeDelete}
             onEdgeClick={onEdgeClick}
-            // Removed onEdgeUpdate prop as it's not supported
             nodeTypes={nodeTypes}
             fitView
             onDragOver={onDragOver}
