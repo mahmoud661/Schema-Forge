@@ -9,11 +9,14 @@ export function useSchemaFlow() {
   const params = useParams();
   const router = useRouter();
   const { schemas, updateSchema } = useSchemaStore();
-  const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNode[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  // Fix: Use SchemaNode (not SchemaNode[]) so state is SchemaNode[]
+  const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [activeTab, setActiveTab] = useState<string>("visual");
-  const { project, undo, redo, canUndo, canRedo } = useReactFlow();
+  
+  // Remove unsupported properties from useReactFlow
+  const reactFlowInstance = useReactFlow();
 
   useEffect(() => {
     const schemaId = params.id as string;
@@ -28,19 +31,24 @@ export function useSchemaFlow() {
     if (schema?.template) {
       const template = templates[schema.template as keyof typeof templates];
       if (template) {
-        setNodes(template.nodes);
+        setNodes(template.nodes as any);
         setEdges(template.edges);
       }
     }
   }, [params.id, schemas, setNodes, setEdges]);
 
   const onConnect = useCallback(
-    (params: Connection | Edge) => {
-      setEdges((eds) => addEdge({
-        ...params,
-        type: 'smoothstep',
-        animated: true,
-      }, eds));
+    (params: Connection | Edge): void => {
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...params,
+            type: 'smoothstep',
+            animated: true,
+          },
+          eds
+        )
+      );
     },
     [setEdges]
   );
@@ -54,8 +62,8 @@ export function useSchemaFlow() {
       }
 
       await updateSchema(schemaId, {
-        nodes: nodes,
-        edges: edges,
+        nodes: nodes as any, // Cast if necessary
+        edges: edges as any,
         updatedAt: new Date().toISOString(),
       });
       router.refresh();
@@ -64,7 +72,7 @@ export function useSchemaFlow() {
     }
   }, [params.id, nodes, edges, updateSchema, router]);
 
-  const onNodeDelete = useCallback((nodesToDelete: Node[]) => {
+  const onNodeDelete = useCallback((nodesToDelete: Node[]): void => {
     setNodes(nodes => nodes.filter(node => 
       !nodesToDelete.some(n => n.id === node.id)
     ));
@@ -110,9 +118,6 @@ export function useSchemaFlow() {
     updateEdgeData,
     activeTab,
     setActiveTab,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
+    // Removed undo, redo, canUndo, canRedo as they are not part of ReactFlowInstance
   };
 }

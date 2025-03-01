@@ -113,8 +113,8 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
         <div className="space-y-2">
           <Label>Relationship Label</Label>
           <Input 
-            placeholder="e.g., has many, belongs to" 
-            value={selectedEdge.label || ''}
+            placeholder="e.g., has many, belongs to"
+            value={typeof selectedEdge.label === "string" ? selectedEdge.label : ""}
             onChange={(e) => handleLabelChange(e.target.value)}
           />
         </div>
@@ -178,7 +178,7 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
         <div className="space-y-2">
           <Label>Relationship Type</Label>
           <Select
-            value={selectedEdge.data?.relationshipType || 'oneToMany'}
+            value={typeof selectedEdge.data?.relationshipType === "string" ? selectedEdge.data.relationshipType : 'oneToMany'}
             onValueChange={(value) => onUpdateEdge(selectedEdge.id, {
               ...selectedEdge,
               data: { ...selectedEdge.data, relationshipType: value }

@@ -10,6 +10,7 @@ export interface ColumnSchema {
 export interface SchemaNodeData {
   label: string;
   schema: ColumnSchema[];
+  [key: string]: unknown;
 }
 
 export interface SchemaNode extends Node {

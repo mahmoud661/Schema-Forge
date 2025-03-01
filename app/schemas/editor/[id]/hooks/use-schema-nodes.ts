@@ -11,7 +11,7 @@ export function useSchemaNodes() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNode } = useReactFlow();
 
-  const onNodeClick = useCallback((_, node: SchemaNode) => {
+  const onNodeClick = useCallback((event: React.MouseEvent, node: SchemaNode) => {
     setSelectedNode(node);
   }, []);
 

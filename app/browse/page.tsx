@@ -67,10 +67,10 @@ export default function Browse() {
   ];
 
   // Get all unique tags from schemas and templates
-  const allTags = [...new Set([
+  const allTags = Array.from(new Set([
     ...schemas.flatMap(schema => schema.tags),
     ...templates.flatMap(template => template.tags)
-  ])];
+  ]));
 
   useEffect(() => {
     // Filter and sort schemas

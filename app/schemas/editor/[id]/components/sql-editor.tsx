@@ -12,7 +12,7 @@ import { generateSql } from "./SQL-Editor/sqlGenerators";
 import { parseSqlToSchema } from "./SQL-Editor/sqlParser";
 import EditorComponent from "./SQL-Editor/EditorComponent";
 import { validateSqlSyntax, fixCommonSqlIssues } from "./SQL-Editor/sql-validation"; // unchanged
-
+import { SchemaNode } from "../types";
 // Types
 interface SqlEditorProps {
   nodes: SchemaNode[];
