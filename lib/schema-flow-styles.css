@@ -8,10 +8,7 @@
   border: 2px solid white;
 }
 
-.react-flow__handle:hover {
-  transform: scale(1.3);
-  transition: transform 0.2s;
-}
+
 
 /* Left handles style */
 .react-flow__handle-left {

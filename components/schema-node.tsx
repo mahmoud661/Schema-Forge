@@ -14,8 +14,7 @@ import { SchemaNodeData, ColumnSchema } from "@/app/schemas/editor/[id]/types";
 
 const getHandleStyle = (type: 'source' | 'target', hasConstraints: boolean = false) => ({
   background: type === 'source' ? '#10b981' : '#3b82f6',
-  width: '12px',
-  height: '12px',
+
   border: '2px solid white',
   boxShadow: `0 0 10px ${type === 'source' ? 'rgba(16, 185, 129, 0.9)' : 'rgba(59, 130, 246, 0.9)'}`,
   opacity: hasConstraints ? 1 : 0.5,
@@ -51,7 +50,7 @@ const SchemaNode = memo(
                   id={`target-${column.title}`}
                   type="target"
                   position={Position.Left}
-                  className="!absolute transition-all duration-150 hover:scale-110"
+                  className="!absolute transition-all duration-150 "
                   style={getHandleStyle('target', isPrimary || isUnique)}
                 />
                   
@@ -85,7 +84,7 @@ const SchemaNode = memo(
                   id={`source-${column.title}`}
                   type="source"
                   position={Position.Right}
-                  className="!absolute transition-all duration-150 hover:scale-110"
+                  className="!absolute transition-all duration-150 "
                   style={getHandleStyle('source', isPrimary || isUnique)}
                 />
               </DatabaseSchemaTableRow>
