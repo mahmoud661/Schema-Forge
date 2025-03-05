@@ -36,10 +36,7 @@ export function SchemaFlow() {
     updateEdgeData,
     activeTab,
     setActiveTab,
-    undo,
-    redo,
-    canUndo,
-    canRedo
+    duplicateColumns,
   } = useSchemaFlow();
 
   const {
@@ -68,6 +65,9 @@ export function SchemaFlow() {
                 updateNodeData(selectedNode, nodeData, setNodes);
               }
             }}
+            duplicateColumns={duplicateColumns[selectedNode?.data?.label]}
+            nodes={nodes}
+            onNodeSelect={(node) => onNodeClick({} as React.MouseEvent, node)}
           />
         );
       case "sql":
@@ -97,19 +97,13 @@ export function SchemaFlow() {
       
       <EditorHeader 
         onSave={onSave}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
       
       <div ref={reactFlowWrapper} className="flex-1 flex">
-        {/* Sidebar content changes based on active tab */}
         {renderSidebar()}
         
-        {/* Flow diagram is always visible */}
         <div className="flex-1 relative" style={{ height: '100%', width: '100%' }}>
           <ReactFlow
             nodes={nodes}
@@ -120,7 +114,6 @@ export function SchemaFlow() {
             onNodeClick={onNodeClick}
             onNodesDelete={onNodeDelete}
             onEdgeClick={onEdgeClick}
-            // Removed onEdgeUpdate prop as it's not supported
             nodeTypes={nodeTypes}
             fitView
             onDragOver={onDragOver}
@@ -135,12 +128,14 @@ export function SchemaFlow() {
               type: 'smoothstep',
               animated: true,
             }}
+            nodesDraggable={true}
+            nodesConnectable={true}
+            elementsSelectable={true}
           >
             <FlowControls />
           </ReactFlow>
         </div>
         
-        {/* Edge sidebar only shows when an edge is selected and in visual mode */}
         {activeTab === "visual" && selectedEdge && (
           <EdgeSidebar 
             selectedEdge={selectedEdge}

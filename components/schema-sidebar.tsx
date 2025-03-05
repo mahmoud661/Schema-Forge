@@ -7,15 +7,24 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Table, KeyRound, Hash, Type, Plus, Trash2 } from "lucide-react";
+import { Table, KeyRound, Hash, Type, Plus, Trash2, AlertCircle, ChevronDown } from "lucide-react";
 import { SchemaNode, SchemaNodeData } from "@/app/schemas/editor/[id]/types";
 import { BaseSidebar } from "./ui/sidebar";
 import { useSidebarStore, SidebarType } from "@/app/schemas/editor/[id]/store/sidebar-store";
+import { Alert, AlertDescription } from "./ui/alert";
+import { toast } from "sonner";
+import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface SidebarProps {
   selectedNode: SchemaNode | null;
   onUpdateNode: (data: Partial<SchemaNodeData>) => void;
-  nodes: SchemaNode[]; // Added to check for duplicate names
+  duplicateColumns?: Record<string, { isDuplicate: boolean; tables: string[] }>;
+  nodes: SchemaNode[];
+  onNodeSelect: (node: SchemaNode) => void;
 }
 
 const dataTypes = [
@@ -38,9 +47,20 @@ const constraints = [
   { id: "index", label: "Index" },
 ];
 
-export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
+// Function to generate a unique color based on string
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = hash % 360;
+  return `hsl(${hue}, 70%, 60%)`;
+};
+
+export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, onNodeSelect }: SidebarProps) {
   const [draggedType, setDraggedType] = useState<string | null>(null);
   const { widths, updateWidth } = useSidebarStore();
+  const [openTableId, setOpenTableId] = useState<string | null>(null);
 
   const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
@@ -54,7 +74,7 @@ export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
 
   const addColumn = () => {
     if (!selectedNode) return;
-    const columnId = Date.now().toString(); // Generate unique ID for new column
+    const columnId = Date.now().toString();
     onUpdateNode({
       schema: [
         ...(selectedNode.data?.schema || []),
@@ -67,14 +87,13 @@ export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
     if (!selectedNode) return;
     const newSchema = [...(selectedNode.data?.schema || [])];
     
-    // For title updates, ensure we handle this specially
     if (field === 'title') {
-      // Ensure title is unique or has a fallback
       const existingTitles = selectedNode.data.schema
         .map(c => c.title)
         .filter((t, i) => i !== index);
       
       if (existingTitles.includes(value)) {
+        toast.warning(`Column name "${value}" already exists in this table`);
         value = `${value}_${index}`;
       }
     }
@@ -107,6 +126,11 @@ export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
     onUpdateNode({ schema: newSchema });
   };
 
+  const handleTableClick = (node: SchemaNode) => {
+    onNodeSelect(node);
+    setOpenTableId(node.id === openTableId ? null : node.id);
+  };
+
   return (
     <BaseSidebar 
       title="Schema Editor" 
@@ -131,100 +155,138 @@ export function Sidebar({ selectedNode, onUpdateNode, nodes }: SidebarProps) {
 
         <Separator />
 
-        {selectedNode ? (
-          <div className="space-y-6">
-            <div>
-              <h3 className="font-semibold mb-4">Table Properties</h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Table Name</Label>
-                  <Input 
-                    placeholder="Enter table name" 
-                    value={selectedNode.data?.label || ''}
-                    onChange={(e) => onUpdateNode({ label: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Columns</h3>
-                <Button onClick={addColumn} size="sm" variant="outline">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Column
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {selectedNode.data?.schema.map((column: any, index: number) => {
-                  // Generate a stable key that doesn't depend on the title
-                  const columnKey = column.id || `column-${index}`;
-                  
-                  return (
-                  <div key={columnKey} className="space-y-2 p-3 border rounded-lg">
+        {/* Tables List */}
+        <div className="space-y-2">
+          <h3 className="font-semibold">Tables</h3>
+          <div className="space-y-2">
+            {nodes.map((node) => (
+              <Collapsible
+                key={node.id}
+                open={openTableId === node.id}
+                onOpenChange={() => handleTableClick(node)}
+              >
+                <CollapsibleTrigger className="w-full">
+                  <div 
+                    className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                    style={{
+                      borderColor: stringToColor(node.data.label),
+                      backgroundColor: `${stringToColor(node.data.label)}10`
+                    }}
+                  >
                     <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="Column name"
-                        value={column.title}
-                        onChange={(e) => updateColumn(index, 'title', e.target.value)}
-                        className="flex-1"
+                      <div 
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: stringToColor(node.data.label) }}
                       />
-                      <Select
-                        value={column.type}
-                        onValueChange={(value) => updateColumn(index, 'type', value)}
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="Data Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {dataTypes.map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              <div className="flex items-center gap-2">
-                                <type.icon className="h-4 w-4" />
-                                {type.label}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeColumn(index)}
-                        className="text-destructive hover:text-destructive/90"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <span className="font-medium">{node.data.label}</span>
                     </div>
-
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      {constraints.map((constraint) => (
-                        <div key={`${columnKey}-${constraint.id}`} className="flex items-center gap-2">
-                          <Switch
-                            checked={(column.constraints || []).includes(constraint.id)}
-                            onCheckedChange={() => toggleConstraint(index, constraint.id)}
-                            id={`${columnKey}-${constraint.id}`}
-                          />
-                          <Label htmlFor={`${columnKey}-${constraint.id}`} className="text-sm">
-                            {constraint.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
+                    <ChevronDown 
+                      className={`h-4 w-4 transition-transform ${openTableId === node.id ? 'transform rotate-180' : ''}`}
+                    />
                   </div>
-                  );
-                })}
-              </div>
-            </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {node.id === selectedNode?.id && (
+                    <div className="mt-4 pl-4 border-l-2" style={{ borderColor: stringToColor(node.data.label) }}>
+                      {/* Table Properties */}
+                      <div className="space-y-4 mb-4">
+                        <div className="space-y-2">
+                          <Label>Table Name</Label>
+                          <Input 
+                            placeholder="Enter table name" 
+                            value={selectedNode.data?.label || ''}
+                            onChange={(e) => onUpdateNode({ label: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Columns */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium">Columns</h4>
+                          <Button onClick={addColumn} size="sm" variant="outline">
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Column
+                          </Button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {selectedNode.data?.schema.map((column: any, index: number) => {
+                            const columnKey = column.id || `column-${index}`;
+                            const isDuplicate = duplicateColumns?.[column.title]?.isDuplicate;
+                            
+                            return (
+                              <div key={columnKey} className="space-y-2 p-3 border rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    placeholder="Column name"
+                                    value={column.title}
+                                    onChange={(e) => updateColumn(index, 'title', e.target.value)}
+                                    className={`flex-1 ${isDuplicate ? 'border-yellow-500' : ''}`}
+                                  />
+                                  <Select
+                                    value={column.type}
+                                    onValueChange={(value) => updateColumn(index, 'type', value)}
+                                  >
+                                    <SelectTrigger className="w-[140px]">
+                                      <SelectValue placeholder="Data Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {dataTypes.map((type) => (
+                                        <SelectItem key={type.id} value={type.id}>
+                                          <div className="flex items-center gap-2">
+                                            <type.icon className="h-4 w-4" />
+                                            {type.label}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeColumn(index)}
+                                    className="text-destructive hover:text-destructive/90"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                {isDuplicate && (
+                                  <Alert variant="warning" className="py-2 px-3">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertDescription className="text-xs">
+                                      Column name duplicated in: {duplicateColumns[column.title].tables.join(', ')}
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+
+                                <div className="flex flex-wrap gap-3 pt-2">
+                                  {constraints.map((constraint) => (
+                                    <div key={`${columnKey}-${constraint.id}`} className="flex items-center gap-2">
+                                      <Switch
+                                        checked={(column.constraints || []).includes(constraint.id)}
+                                        onCheckedChange={() => toggleConstraint(index, constraint.id)}
+                                        id={`${columnKey}-${constraint.id}`}
+                                      />
+                                      <Label htmlFor={`${columnKey}-${constraint.id}`} className="text-sm">
+                                        {constraint.label}
+                                      </Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            ))}
           </div>
-        ) : (
-          <div className="text-center text-muted-foreground p-4">
-            Select a table to edit its properties
-          </div>
-        )}
+        </div>
       </div>
     </BaseSidebar>
   );

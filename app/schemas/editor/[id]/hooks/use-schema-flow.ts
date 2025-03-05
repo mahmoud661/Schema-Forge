@@ -4,24 +4,30 @@ import { Connection, Edge, useNodesState, useEdgesState, addEdge, Node, useReact
 import { useSchemaStore } from "@/lib/store";
 import { templates } from "@/lib/schema-templates";
 import { SchemaNode } from "../types";
+import { toast } from "sonner";
+
+interface DuplicateColumnInfo {
+  [columnName: string]: {
+    isDuplicate: boolean;
+    tables: string[];
+  };
+}
 
 export function useSchemaFlow() {
   const params = useParams();
   const router = useRouter();
   const { schemas, updateSchema } = useSchemaStore();
-  // Fix: Use SchemaNode (not SchemaNode[]) so state is SchemaNode[]
   const [nodes, setNodes, onNodesChange] = useNodesState<SchemaNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [activeTab, setActiveTab] = useState<string>("visual");
+  const [duplicateColumns, setDuplicateColumns] = useState<Record<string, DuplicateColumnInfo>>({});
   
-  // Remove unsupported properties from useReactFlow
   const reactFlowInstance = useReactFlow();
 
   useEffect(() => {
     const schemaId = params.id as string;
     if (schemaId === "new") {
-      // Initialize with empty canvas
       setNodes([]);
       setEdges([]);
       return;
@@ -37,38 +43,116 @@ export function useSchemaFlow() {
     }
   }, [params.id, schemas, setNodes, setEdges]);
 
+  // Check for duplicate column names across all tables
+  useEffect(() => {
+    const columnMap: Record<string, string[]> = {};
+    const newDuplicateColumns: Record<string, DuplicateColumnInfo> = {};
+
+    // Build a map of column names to table names
+    nodes.forEach((node) => {
+      node.data.schema.forEach((column) => {
+        if (!columnMap[column.title]) {
+          columnMap[column.title] = [];
+        }
+        columnMap[column.title].push(node.data.label);
+      });
+    });
+
+    // Find duplicates and build the duplicate info structure
+    Object.entries(columnMap).forEach(([columnName, tables]) => {
+      if (tables.length > 1) {
+        tables.forEach((tableName) => {
+          if (!newDuplicateColumns[tableName]) {
+            newDuplicateColumns[tableName] = {};
+          }
+          newDuplicateColumns[tableName][columnName] = {
+            isDuplicate: true,
+            tables: tables.filter(t => t !== tableName)
+          };
+        });
+      }
+    });
+
+    setDuplicateColumns(newDuplicateColumns);
+  }, [nodes]);
+
   const onConnect = useCallback(
-    (params: Connection | Edge): void => {
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...params,
+    (params: Connection | Edge) => {
+      // Handle table-level connections
+      if (params.targetHandle?.startsWith('table-')) {
+        const sourceNode = nodes.find(n => n.id === params.source);
+        const targetNode = nodes.find(n => n.id === params.target);
+        
+        if (sourceNode && targetNode) {
+          const sourceColumn = params.sourceHandle?.split('-')[1];
+          
+          // Create a new foreign key column in the target table
+          const newColumn = {
+            title: `${sourceNode.data.label.toLowerCase()}_id`,
+            type: "uuid",
+            constraints: ["notnull"],
+            id: `col-${Date.now()}-${Math.random()}`
+          };
+          
+          // Update the target node with the new column
+          const updatedNodes = nodes.map(node => {
+            if (node.id === targetNode.id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  schema: [...node.data.schema, newColumn]
+                }
+              };
+            }
+            return node;
+          });
+          
+          setNodes(updatedNodes);
+          
+          // Create the edge connection to the new column
+          const newEdge = {
+            id: `e${params.source}-${params.target}`,
+            source: params.source,
+            target: params.target,
+            sourceHandle: params.sourceHandle,
+            targetHandle: `target-${newColumn.title}`,
             type: 'smoothstep',
             animated: true,
-          },
-          eds
-        )
-      );
+          };
+          
+          setEdges(eds => addEdge(newEdge, eds));
+          toast.success("Created new foreign key column and relationship");
+        }
+      } else {
+        // Handle normal column-to-column connections
+        setEdges(eds => addEdge({
+          ...params,
+          type: 'smoothstep',
+          animated: true,
+        }, eds));
+      }
     },
-    [setEdges]
+    [nodes, setNodes, setEdges]
   );
 
   const onSave = useCallback(async () => {
     try {
       const schemaId = params.id as string;
       if (schemaId === "new") {
-        // Handle new schema creation
         return;
       }
 
       await updateSchema(schemaId, {
-        nodes: nodes as any, // Cast if necessary
+        nodes: nodes as any,
         edges: edges as any,
         updatedAt: new Date().toISOString(),
       });
       router.refresh();
+      toast.success("Schema saved successfully");
     } catch (error) {
       console.error('Failed to save schema:', error);
+      toast.error("Failed to save schema");
     }
   }, [params.id, nodes, edges, updateSchema, router]);
 
@@ -82,7 +166,6 @@ export function useSchemaFlow() {
     setSelectedEdge(edge);
   }, []);
 
-  // This function is kept for compatibility but won't be passed to ReactFlow
   const onEdgeUpdate = useCallback((oldEdge: Edge, newConnection: Connection) => {
     setEdges(edges => edges.map(e => e.id === oldEdge.id ? { ...oldEdge, ...newConnection } : e));
   }, [setEdges]);
@@ -92,7 +175,6 @@ export function useSchemaFlow() {
       edge.id === edgeId ? { ...edge, ...data } : edge
     ));
     
-    // Update the selected edge reference
     setSelectedEdge(prev => {
       if (prev && prev.id === edgeId) {
         return { ...prev, ...data };
@@ -118,6 +200,6 @@ export function useSchemaFlow() {
     updateEdgeData,
     activeTab,
     setActiveTab,
-    // Removed undo, redo, canUndo, canRedo as they are not part of ReactFlowInstance
+    duplicateColumns,
   };
 }
