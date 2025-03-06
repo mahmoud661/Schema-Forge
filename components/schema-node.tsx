@@ -105,20 +105,20 @@ const SchemaNode = memo(
           />
         </DatabaseSchemaNodeHeader>
         <DatabaseSchemaNodeBody>
-          {data.schema.map((column: ColumnSchema, idx) => {
-            const constraints = column.constraints || [];
+          {data.schema.map((row: ColumnSchema, idx) => {
+            const constraints = row.constraints || [];
             const isPrimary = constraints.includes('primary');
             const isUnique = constraints.includes('unique');
             const isNotNull = constraints.includes('notnull');
             const isIndex = constraints.includes('index');
-            const isEnum = column.type.startsWith('enum_'); // Check if column is an ENUM type
-            const duplicateInfo = duplicateColumns?.[column.title];
+            const isEnum = row.type.startsWith('enum_'); // Check if row is an ENUM type
+            const duplicateInfo = duplicateColumns?.[row.title];
             
-            const columnKey = column.id || `${idx}-${column.title}`;
+            const columnKey = row.id || `${idx}-${row.title}`;
             
             // Extract the enum name for display if it's an enum
             const enumName = isEnum 
-              ? column.type.replace('enum_', '') 
+              ? row.type.replace('enum_', '') 
               : null;
 
             return (
@@ -131,7 +131,7 @@ const SchemaNode = memo(
                 )}
               >
                 <Handle
-                  id={`target-${column.title}`}
+                  id={`target-${row.title}`}
                   type="target"
                   position={Position.Left}
                   className="!absolute transition-all duration-150"
@@ -143,7 +143,7 @@ const SchemaNode = memo(
                 <DatabaseSchemaTableCell className="pl-4 pr-2">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-xs font-medium">
-                      {column.title}
+                      {row.title}
                       {duplicateInfo?.isDuplicate && (
                         <TooltipProvider>
                           <Tooltip>
@@ -151,7 +151,7 @@ const SchemaNode = memo(
                               <AlertCircle className="inline-block ml-1 h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                             </TooltipTrigger>
                             <TooltipContent className="bg-popover text-popover-foreground border">
-                              <p>Column name duplicated in tables:</p>
+                              <p>Row name duplicated in tables:</p>
                               <ul className="list-disc ml-4">
                                 {duplicateInfo.tables.map((table) => (
                                   <li key={table}>{table}</li>
@@ -200,13 +200,13 @@ const SchemaNode = memo(
                     </TooltipProvider>
                   ) : (
                     <span className="text-right truncate text-xs w-full italic opacity-80">
-                      {column.type}
+                      {row.type}
                     </span>
                   )}
                 </DatabaseSchemaTableCell>
                   
                 <Handle
-                  id={`source-${column.title}`}
+                  id={`source-${row.title}`}
                   type="source"
                   position={Position.Right}
                   className="!absolute transition-all duration-150"

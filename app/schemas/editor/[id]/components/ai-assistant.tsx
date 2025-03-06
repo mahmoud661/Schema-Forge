@@ -170,16 +170,16 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
       // Suggest adding indexes to tables
       const optimizedNodes = currentNodes.map(node => {
         // Find string columns that might benefit from indexes
-        const updatedSchema = node.data.schema.map(column => {
-          if ((column.type === 'varchar' || column.type === 'text') && 
-              !column.constraints?.includes('index') && 
-              !column.constraints?.includes('primary')) {
+        const updatedSchema = node.data.schema.map(row => {
+          if ((row.type === 'varchar' || row.type === 'text') && 
+              !row.constraints?.includes('index') && 
+              !row.constraints?.includes('primary')) {
             return {
-              ...column,
-              constraints: [...(column.constraints || []), 'index']
+              ...row,
+              constraints: [...(row.constraints || []), 'index']
             };
           }
-          return column;
+          return row;
         });
         
         return {
@@ -194,9 +194,9 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
       // Generate SQL for the indexes
       let sql = "-- Add indexes for better performance\n";
       optimizedNodes.forEach(node => {
-        node.data.schema.forEach(column => {
-          if (column.constraints?.includes('index') && !column.constraints.includes('primary')) {
-            sql += `CREATE INDEX idx_${node.data.label.toLowerCase()}_${column.title} ON ${node.data.label.toLowerCase()} (${column.title});\n`;
+        node.data.schema.forEach(row => {
+          if (row.constraints?.includes('index') && !row.constraints.includes('primary')) {
+            sql += `CREATE INDEX idx_${node.data.label.toLowerCase()}_${row.title} ON ${node.data.label.toLowerCase()} (${row.title});\n`;
           }
         });
       });
@@ -258,17 +258,17 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
   const generateTableSql = (node: SchemaNode): string => {
     let sql = `CREATE TABLE IF NOT EXISTS ${node.data.label.toLowerCase()} (\n`;
     
-    node.data.schema.forEach((column, index) => {
-      sql += `  ${column.title} ${column.type}`;
+    node.data.schema.forEach((row, index) => {
+      sql += `  ${row.title} ${row.type}`;
       
-      if (column.constraints) {
-        if (column.constraints.includes('primary')) {
+      if (row.constraints) {
+        if (row.constraints.includes('primary')) {
           sql += ' PRIMARY KEY';
         }
-        if (column.constraints.includes('notnull')) {
+        if (row.constraints.includes('notnull')) {
           sql += ' NOT NULL';
         }
-        if (column.constraints.includes('unique')) {
+        if (row.constraints.includes('unique')) {
           sql += ' UNIQUE';
         }
       }
@@ -282,9 +282,9 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
     sql += ');';
     
     // Add indexes
-    node.data.schema.forEach(column => {
-      if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
-        sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${column.title} ON ${node.data.label.toLowerCase()} (${column.title});`;
+    node.data.schema.forEach(row => {
+      if (row.constraints && row.constraints.includes('index') && !row.constraints.includes('primary')) {
+        sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${row.title} ON ${node.data.label.toLowerCase()} (${row.title});`;
       }
     });
     

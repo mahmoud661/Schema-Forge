@@ -1,112 +1,125 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { Position, Handle } from "@xyflow/react";
+import { Position, Handle, NodeProps } from "@xyflow/react";
 import { useTheme } from "next-themes";
-import { themeAwareStringToColor } from "@/lib/utils";
-import {
-  DatabaseSchemaNode,
-  DatabaseSchemaNodeHeader,
-  DatabaseSchemaNodeBody,
-} from "@/components/database-schema-node";
 import { Badge } from "@/components/ui/badge";
 import { EnumNodeData } from "@/app/schemas/editor/[id]/types";
 
-const EnumNode = memo(
-  ({ data, selected }: { data: EnumNodeData; selected?: boolean }) => {
-    const [mounted, setMounted] = useState(false);
-    const { resolvedTheme } = useTheme();
-    const isDarkMode = resolvedTheme === "dark";
+interface EnumNodeProps extends NodeProps {
+  data: EnumNodeData;
+  selected?: boolean;
+}
 
-    useEffect(() => {
-      setMounted(true);
-    }, []);
+const EnumNode = memo(({ id, data, selected }: EnumNodeProps & { id: string }) => {
+  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === "dark";
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-    if (!mounted) {
-      return (
-        <DatabaseSchemaNode className="p-0 shadow-md min-w-[180px]">
-          <DatabaseSchemaNodeHeader>
-            <div className="w-full rounded-t-md py-2 px-3 font-medium bg-muted/20">
-              {data.name}
-            </div>
-          </DatabaseSchemaNodeHeader>
-          <DatabaseSchemaNodeBody>Loading...</DatabaseSchemaNodeBody>
-        </DatabaseSchemaNode>
-      );
-    }
-
-    const headerColor = themeAwareStringToColor(data.name, {
-      darkMode: isDarkMode,
-      hue: 280, // Purple hue for enums
-    });
-
+  if (!mounted) {
     return (
-      <DatabaseSchemaNode
-        className={`p-0 transition-all duration-200 ${
-          selected ? "ring-2 ring-primary shadow-lg" : "shadow-md"
-        } min-w-[180px]`}
-        selected={selected}
+      <div className="bg-background p-0 shadow-md min-w-[180px] border rounded-md overflow-hidden">
+        <div className="w-full rounded-t-md py-2 px-3 font-medium bg-muted/20">
+          {data.name}
+        </div>
+        <div className="p-3">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div
+        className={` 
+          bg-background p-0 transition-all duration-200 
+          ${selected ? "ring-1 ring-purple-500 shadow-md" : "shadow-sm"} 
+          min-w-[200px] rounded-md overflow-hidden relative border
+        `}
+        style={{ zIndex: selected ? 30 : 20 }}
       >
-        <DatabaseSchemaNodeHeader>
+        {/* Header */}
+        <div className="relative overflow-visible">
           <div
-            className="w-full rounded-t-md py-2 px-3 font-medium"
-            style={{
-              backgroundColor: themeAwareStringToColor(data.name, {
-                darkMode: isDarkMode,
-                hue: 280,
-                saturation: isDarkMode ? 40 : 70,
-                lightness: { light: 96, dark: 20 },
-                opacity: 0.25,
-              }),
-              borderBottom: `2px solid ${headerColor}`,
-            }}
+            className={`
+              w-full font-medium text-foreground py-2.5 px-3 rounded-t-md border-b
+              ${isDarkMode ? "bg-purple-950/30 border-purple-800/40" : "bg-purple-100/70 border-purple-200"}
+            `}
           >
             <Badge
               variant="outline"
-              className="mr-2 border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+              className={`
+                mr-2 py-0 px-1.5 text-[0.65rem] font-medium 
+                ${isDarkMode ? "bg-purple-950 border-purple-800 text-purple-300" : "bg-purple-50 border-purple-200 text-purple-700"}
+              `}
             >
               ENUM
             </Badge>
-            {data.name}
+            <span className="ml-0.5">{data.name}</span>
           </div>
-          <Handle
-            type="source"
-            position={Position.Right}
-            id={`enum-source-${data.name}`}
-            className="!absolute transition-all duration-150"
-            style={{
-              background: isDarkMode ? "#a855f7" : "#9333ea",
-              border: `2px solid ${isDarkMode ? "#374151" : "white"}`,
-              width: "12px",
-              height: "12px",
-              right: -6,
-            }}
-          />
-        </DatabaseSchemaNodeHeader>
-        <DatabaseSchemaNodeBody className="p-3 space-y-1">
+        </div>
+
+        {/* Body that covers entire area for connection */}
+        <div className="relative" style={{ cursor: "pointer" }}>
           {data.values && data.values.length > 0 ? (
-            data.values.map((value, index) => (
-              <div
-                key={index}
-                className="flex items-center py-1 px-2 text-xs rounded hover:bg-muted/60"
-              >
-                <span className="text-muted-foreground mr-2">→</span>
-                <span className="font-mono">&apos;{value}&apos;</span>
-              </div>
-            ))
+            <div className="w-full rounded overflow-hidden border border-muted/50">
+              <table className="w-full text-xs">
+                <thead className={isDarkMode ? "bg-muted/40" : "bg-muted/20"}>
+                  <tr>
+                    <th className="text-left py-1.5 px-3 font-medium border-b border-muted/30">
+                      Value
+                    </th>
+                    <th className="text-right py-1.5 px-3 font-medium border-b border-muted/30">
+                      Index
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.values.map((value, index) => (
+                    <tr
+                      key={index}
+                      className={`hover:bg-muted/60 transition-colors ${index % 2 === 0 ? (isDarkMode ? "bg-muted/20" : "bg-muted/10") : ""}`}
+                    >
+                      <td className="py-1.5 px-3 font-mono border-b border-muted/20">
+                        <div className="flex items-center gap-2">
+                          <span className={isDarkMode ? "text-purple-400" : "text-purple-600"}>•</span>
+                          {`'${value}'`}
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-3 text-right text-muted-foreground text-[10px] border-b border-muted/20">
+                        {index}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <div className="text-xs italic text-muted-foreground p-2">
+            <div className="text-xs italic text-center text-muted-foreground p-3 border border-dashed border-muted/50 rounded-md w-full">
               No values defined
             </div>
           )}
-          <div className="text-xs text-center pt-2 pb-1 mt-1 border-t text-muted-foreground">
-            Click to edit
-          </div>
-        </DatabaseSchemaNodeBody>
-      </DatabaseSchemaNode>
-    );
-  }
-);
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "transparent",
+              zIndex: 100,
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
 
 EnumNode.displayName = "EnumNode";
 

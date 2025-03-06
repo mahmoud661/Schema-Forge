@@ -68,44 +68,44 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
   const foreignKeys: string[] = [];
   
-  node.data.schema.forEach((column: any, index: number) => {
-    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
-    sql += `  ${columnName} ${column.type}`;
+  node.data.schema.forEach((row: any, index: number) => {
+    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
+    sql += `  ${columnName} ${row.type}`;
     
     // Handle defaults
-    if (column.default) {
-      sql += ` DEFAULT ${column.default}`;
+    if (row.default) {
+      sql += ` DEFAULT ${row.default}`;
     }
     
     // Add constraints inline
-    if (column.constraints) {
-      if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
-      if (column.constraints.includes('notnull')) sql += ' NOT NULL';
-      if (column.constraints.includes('unique')) sql += ' UNIQUE';
+    if (row.constraints) {
+      if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
+      if (row.constraints.includes('notnull')) sql += ' NOT NULL';
+      if (row.constraints.includes('unique')) sql += ' UNIQUE';
     }
     
     // Handle foreign keys (only if using inline constraints)
-    if (column.foreignKey && useInlineConstraints) {
+    if (row.foreignKey && useInlineConstraints) {
       const refTable = useCaseSensitive ? 
-        `"${column.foreignKey.table.replace(/"/g, '""')}"` : column.foreignKey.table;
+        `"${row.foreignKey.table.replace(/"/g, '""')}"` : row.foreignKey.table;
       const refColumn = useCaseSensitive ? 
-        `"${column.foreignKey.column.replace(/"/g, '""')}"` : column.foreignKey.column;
+        `"${row.foreignKey.row.replace(/"/g, '""')}"` : row.foreignKey.row;
       
       sql += ` REFERENCES ${refTable}(${refColumn})`;
-      if (column.foreignKey.onDelete) {
-        sql += ` ON DELETE ${column.foreignKey.onDelete}`;
+      if (row.foreignKey.onDelete) {
+        sql += ` ON DELETE ${row.foreignKey.onDelete}`;
       }
-      if (column.foreignKey.onUpdate) {
-        sql += ` ON UPDATE ${column.foreignKey.onUpdate}`;
+      if (row.foreignKey.onUpdate) {
+        sql += ` ON UPDATE ${row.foreignKey.onUpdate}`;
       }
-    } else if (column.foreignKey && !useInlineConstraints) {
+    } else if (row.foreignKey && !useInlineConstraints) {
       // Store for later ALTER TABLE statements
       foreignKeys.push({
-        column: columnName,
-        refTable: column.foreignKey.table,
-        refColumn: column.foreignKey.column,
-        onDelete: column.foreignKey.onDelete,
-        onUpdate: column.foreignKey.onUpdate
+        row: columnName,
+        refTable: row.foreignKey.table,
+        refColumn: row.foreignKey.row,
+        onDelete: row.foreignKey.onDelete,
+        onUpdate: row.foreignKey.onUpdate
       });
     }
     
@@ -115,14 +115,14 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
   sql += ');';
   
   // Create indexes for columns marked as index but not primary
-  node.data.schema.forEach((column: any) => {
-    if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
+  node.data.schema.forEach((row: any) => {
+    if (row.constraints && row.constraints.includes('index') && !row.constraints.includes('primary')) {
       const safeTableName = useCaseSensitive ? 
         `"${node.data.label.replace(/"/g, '""')}"` : node.data.label.toLowerCase().replace(/\s/g, '_');
       const safeColName = useCaseSensitive ?
-        `"${column.title.replace(/"/g, '""')}"` : column.title.replace(/\s/g, '_');
+        `"${row.title.replace(/"/g, '""')}"` : row.title.replace(/\s/g, '_');
       
-      sql += `\nCREATE INDEX idx_${safeTableName}_${safeColName} ON ${tableName} (${getQuotedColumnName(column.title, useCaseSensitive)});`;
+      sql += `\nCREATE INDEX idx_${safeTableName}_${safeColName} ON ${tableName} (${getQuotedColumnName(row.title, useCaseSensitive)});`;
     }
   });
   
@@ -132,25 +132,25 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
 export const generateMySqlTable = (node: any, useCaseSensitive: boolean = false) => {
   const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
-  node.data.schema.forEach((column: any, index: number) => {
-    let mysqlType = column.type;
-    if (column.type === 'uuid') mysqlType = 'VARCHAR(36)';
-    if (column.type === 'text') mysqlType = 'TEXT';
-    if (column.type === 'int4') mysqlType = 'INT';
-    if (column.type === 'timestamp') mysqlType = 'DATETIME';
-    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
+  node.data.schema.forEach((row: any, index: number) => {
+    let mysqlType = row.type;
+    if (row.type === 'uuid') mysqlType = 'VARCHAR(36)';
+    if (row.type === 'text') mysqlType = 'TEXT';
+    if (row.type === 'int4') mysqlType = 'INT';
+    if (row.type === 'timestamp') mysqlType = 'DATETIME';
+    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
     sql += `  ${columnName} ${mysqlType}`;
-    if (column.constraints) {
-      if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
-      if (column.constraints.includes('notnull')) sql += ' NOT NULL';
-      if (column.constraints.includes('unique')) sql += ' UNIQUE';
+    if (row.constraints) {
+      if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
+      if (row.constraints.includes('notnull')) sql += ' NOT NULL';
+      if (row.constraints.includes('unique')) sql += ' UNIQUE';
     }
     sql += index < node.data.schema.length - 1 ? ',\n' : '\n';
   });
   sql += ') ENGINE=InnoDB;';
-  node.data.schema.forEach((column: any) => {
-    if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
-      sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${column.title} ON ${node.data.label.toLowerCase()} (${column.title});`;
+  node.data.schema.forEach((row: any) => {
+    if (row.constraints && row.constraints.includes('index') && !row.constraints.includes('primary')) {
+      sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${row.title} ON ${node.data.label.toLowerCase()} (${row.title});`;
     }
   });
   return sql;
@@ -159,25 +159,25 @@ export const generateMySqlTable = (node: any, useCaseSensitive: boolean = false)
 export const generateSqliteTable = (node: any, useCaseSensitive: boolean = false) => {
   const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
-  node.data.schema.forEach((column: any, index: number) => {
-    let sqliteType = column.type;
-    if (column.type === 'uuid') sqliteType = 'TEXT';
-    if (column.type === 'int4') sqliteType = 'INTEGER';
-    if (column.type === 'timestamp') sqliteType = 'DATETIME';
-    if (column.type === 'money') sqliteType = 'REAL';
-    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
+  node.data.schema.forEach((row: any, index: number) => {
+    let sqliteType = row.type;
+    if (row.type === 'uuid') sqliteType = 'TEXT';
+    if (row.type === 'int4') sqliteType = 'INTEGER';
+    if (row.type === 'timestamp') sqliteType = 'DATETIME';
+    if (row.type === 'money') sqliteType = 'REAL';
+    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
     sql += `  ${columnName} ${sqliteType}`;
-    if (column.constraints) {
-      if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
-      if (column.constraints.includes('notnull')) sql += ' NOT NULL';
-      if (column.constraints.includes('unique')) sql += ' UNIQUE';
+    if (row.constraints) {
+      if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
+      if (row.constraints.includes('notnull')) sql += ' NOT NULL';
+      if (row.constraints.includes('unique')) sql += ' UNIQUE';
     }
     sql += index < node.data.schema.length - 1 ? ',\n' : '\n';
   });
   sql += ');';
-  node.data.schema.forEach((column: any) => {
-    if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
-      sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${column.title} ON ${node.data.label.toLowerCase()} (${column.title});`;
+  node.data.schema.forEach((row: any) => {
+    if (row.constraints && row.constraints.includes('index') && !row.constraints.includes('primary')) {
+      sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase()}_${row.title} ON ${node.data.label.toLowerCase()} (${row.title});`;
     }
   });
   return sql;
@@ -234,7 +234,7 @@ export const generateSql = (
         
         if (!sourceNode || !targetNode) return;
         
-        // Parse the handle format to get the column name
+        // Parse the handle format to get the row name
         const sourceColumn = edge.sourceHandle?.split('-').slice(1).join('-') || 'id';
         const targetColumn = edge.targetHandle?.split('-').slice(1).join('-') || 'id';
         

@@ -354,5 +354,5 @@ const persistConfig: PersistOptions<SchemaState> = {
 
 // Create store with configurable middleware pipeline
 export const useSchemaStore = create<SchemaState>()(
-  devtools(debugMiddleware(persist(storeImplementation, persistConfig)))
+persist(storeImplementation, persistConfig)
 );

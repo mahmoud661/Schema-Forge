@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { Database, ShoppingCart, BookOpen, Package, Plus, Search, Filter, Calendar, ArrowUpDown } from "lucide-react";
-import { useSchemaStore } from "@/lib/store";
+import { useSchemaStore } from "@/hooks/use-schema";
 import { motion } from "framer-motion";
 import { Navigation } from "@/components/navigation";
 
@@ -68,7 +68,7 @@ export default function Browse() {
 
   // Get all unique tags from schemas and templates
   const allTags = Array.from(new Set([
-    ...schemas.flatMap(schema => schema.tags),
+    ...schemas?.flatMap(schema => schema.tags),
     ...templates.flatMap(template => template.tags)
   ]));
 
@@ -79,9 +79,9 @@ export default function Browse() {
     // Apply search filter
     if (searchTerm) {
       result = result.filter(schema => 
-        schema.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schema.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schema.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        schema?.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schema?.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schema?.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     
@@ -192,16 +192,16 @@ export default function Browse() {
             </div>
           </div>
 
-          {filteredSchemas.length > 0 ? (
+          {filteredSchemas?.length > 0 ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredSchemas.map((schema) => (
+              {filteredSchemas?.map((schema) => (
                 <motion.div
                   key={schema.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <Link href={`/schemas/editor/${schema.id}`}>
+                  <Link href={`/schemas/editor/${schema?.id}`}>
                     <Card className="h-full bg-gradient-to-b from-background to-background/80 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02] border-primary/10">
                       <CardHeader>
                         <div className="flex items-center gap-3">
@@ -211,12 +211,12 @@ export default function Browse() {
                           <CardTitle className="text-xl">{schema.title}</CardTitle>
                         </div>
                         <CardDescription className="text-muted-foreground mt-2">
-                          {schema.description}
+                          {schema?.description}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="flex gap-2 flex-wrap">
-                          {schema.tags.map((tag) => (
+                          {schema?.tags.map((tag) => (
                             <Badge 
                               key={tag} 
                               variant="secondary"
@@ -230,7 +230,7 @@ export default function Browse() {
                       <CardFooter className="text-xs text-muted-foreground flex justify-between">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          <span>Updated {formatDate(schema.updatedAt)}</span>
+                          <span>Updated {formatDate(schema?.updatedAt)}</span>
                         </div>
                         {schema.template && (
                           <Badge variant="outline" className="text-xs">

@@ -46,7 +46,7 @@ The SQL Editor follows a clear data flow pattern:
 
 2. SQL generation process:
    - Tables are created from each node
-   - Column definitions are built from node schema data
+   - Row definitions are built from node schema data
    - Foreign key constraints are derived from edge connections
    - SQL dialect-specific formatting is applied based on the selected database type
 
@@ -60,7 +60,7 @@ The SQL Editor follows a clear data flow pattern:
 
 2. SQL parsing process:
    - `CREATE TABLE` statements are extracted and parsed into nodes
-   - Column definitions are parsed into schema properties
+   - Row definitions are parsed into schema properties
    - Constraints (PRIMARY KEY, FOREIGN KEY, etc.) are identified
    - Relationships between tables are extracted and converted to edges
 
@@ -76,12 +76,12 @@ const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w"`\[\]]+)\s*\(
 
 This regex accounts for different quoting styles and optional "IF NOT EXISTS" clauses.
 
-### Column Parsing
+### Row Parsing
 
 Columns are extracted by:
 
 - Splitting the table content by commas (carefully handling commas inside parentheses)
-- Parsing individual column definitions with type and constraints
+- Parsing individual row definitions with type and constraints
 - Handling quoted identifiers in various formats
 
 ```typescript
@@ -97,7 +97,7 @@ const columnLines = tableContent
 Foreign key relationships are detected through:
 
 - Standalone `FOREIGN KEY` constraints
-- Inline `REFERENCES` clauses in column definitions
+- Inline `REFERENCES` clauses in row definitions
 - `ALTER TABLE ADD FOREIGN KEY` statements
 
 These are then converted to edges in the visual representation.
@@ -112,7 +112,7 @@ For each node in the schema, a `CREATE TABLE` statement is generated with:
 
 - Table name derived from the node label
 - Columns generated from the node schema
-- Primary key and other constraints based on column properties
+- Primary key and other constraints based on row properties
 
 ### Constraint Generation
 
@@ -139,13 +139,13 @@ Each dialect has specific type mappings and syntax rules.
 ### Syntax Validation
 
 - Checks for basic syntax issues like mismatched parentheses
-- Validates table definitions and column syntax
-- Detects duplicate table and column names
+- Validates table definitions and row syntax
+- Detects duplicate table and row names
 
 ### Foreign Key Validation
 
 - Verifies that referenced tables exist
-- Checks that column references are valid
+- Checks that row references are valid
 
 ### Error Display
 

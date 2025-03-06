@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
-import { Sidebar } from "@/components/schema-sidebar";
+import { Sidebar } from "@/app/schemas/editor/[id]/components/SideBar/schema-sidebar";
 import { EdgeSidebar } from "./edge-sidebar";
 import { FlowControls } from "./flow-controls";
 import { EditorHeader } from "./editor-header";
@@ -47,7 +47,8 @@ export function SchemaFlow() {
     onNodeClick,
     onDragOver,
     onDrop,
-    updateNodeData
+    updateNodeData,
+    deleteNode
   } = useSchemaNodes();
 
   const handleUpdateSchema = (newNodes, newEdges) => {
@@ -66,6 +67,9 @@ export function SchemaFlow() {
               if (selectedNode) {
                 updateNodeData(selectedNode, nodeData, setNodes);
               }
+            }}
+            onDeleteNode={(node) => {
+              deleteNode(node);
             }}
             duplicateColumns={duplicateColumns[selectedNode?.data?.label]}
             nodes={nodes}
@@ -133,6 +137,7 @@ export function SchemaFlow() {
             nodesDraggable={true}
             nodesConnectable={true}
             elementsSelectable={true}
+            connectOnClick={true}
           >
             <FlowControls />
           </ReactFlow>

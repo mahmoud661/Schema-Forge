@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { EnumTypeNode, SchemaNode } from "@/app/schemas/editor/[id]/types";
 import { useSchemaStore } from "@/hooks/use-schema";
+import { useSchemaFlow } from "@/app/schemas/editor/[id]/hooks/use-schema-flow";
 
 export const useEnumOperations = (
   selectedNode: EnumTypeNode | null,
@@ -10,17 +11,28 @@ export const useEnumOperations = (
 ) => {
   const [newEnumValue, setNewEnumValue] = useState("");
   const { schema, updateEnumType, removeEnumType } = useSchemaStore();
+  
+  // Get the updateEnumTypeNameInColumns function from useSchemaFlow
+  // We need this in a component that uses useEnumOperations
+  let schemaFlowFunctions: any = {};
+  try {
+    schemaFlowFunctions = useSchemaFlow();
+  } catch (e) {
+    // Ignore - in some contexts useReactFlow won't be available
+  }
+  
+  const { updateEnumTypeNameInColumns, updateEnumEdges } = schemaFlowFunctions;
 
   const findColumnsUsingEnum = () => {
     if (!selectedNode) return [];
     
-    const usages: { table: string, column: string }[] = [];
+    const usages: { table: string, row: string }[] = [];
     
     nodes.forEach(node => {
       if ((node.type === 'databaseSchema' || !node.type) && node.data.schema) {
         node.data.schema.forEach((col: any) => {
           if (col.type === `enum_${selectedNode.data.name}`) {
-            usages.push({ table: node.data.label, column: col.title });
+            usages.push({ table: node.data.label, row: col.title });
           }
         });
       }
@@ -86,6 +98,9 @@ export const useEnumOperations = (
     // Don't allow empty names
     if (!newName.trim()) return;
     
+    // No change case
+    if (newName === selectedNode.data.name) return;
+    
     // Check for duplicate names
     const isDuplicate = schema.enumTypes.some(et => 
       et.name !== selectedNode.data.name && et.name.toLowerCase() === newName.toLowerCase()
@@ -98,7 +113,7 @@ export const useEnumOperations = (
     
     const oldName = selectedNode.data.name;
     
-    // Update enum node
+    // Update enum node first
     onUpdateNode({
       name: newName
     });
@@ -112,17 +127,18 @@ export const useEnumOperations = (
       });
     }
     
-    // Find columns using this enum
-    const tablesWithEnum = nodes.filter(node => 
-      node.type === 'databaseSchema' || !node.type
-    ).filter(node => 
-      node.data.schema?.some((col: any) => 
-        col.type === `enum_${oldName}`
-      )
-    );
+    // Update all columns using this enum
+    if (updateEnumTypeNameInColumns) {
+      const updated = updateEnumTypeNameInColumns(oldName, newName);
+      
+      if (updated) {
+        toast.info(`Updated ENUM reference in columns`);
+      }
+    }
     
-    if (tablesWithEnum.length > 0) {
-      toast.info(`Updated ENUM reference in ${tablesWithEnum.length} table(s)`);
+    // Update edge labels
+    if (updateEnumEdges) {
+      updateEnumEdges(selectedNode.id, newName);
     }
   };
 

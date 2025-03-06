@@ -8,7 +8,7 @@ import { useState } from "react";
 interface EnumEditorProps {
   name: string;
   values: string[];
-  usages: Array<{ table: string; column: string }>;
+  usages: Array<{ table: string; row: string }>;
   onRename: (newName: string) => void;
   onAddValue: (value: string) => void;
   onRemoveValue: (value: string) => void;
@@ -25,11 +25,39 @@ export const EnumEditor: React.FC<EnumEditorProps> = ({
   onDelete,
 }) => {
   const [newValue, setNewValue] = useState("");
+  const [editingName, setEditingName] = useState(name);
+  
+  // Handle name change with proper state management to avoid UI flicker
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditingName(e.target.value);
+  };
+  
+  // Only update the actual name when focus is lost
+  const handleNameBlur = () => {
+    if (editingName.trim() !== '' && editingName !== name) {
+      onRename(editingName);
+    } else if (editingName.trim() === '') {
+      // Reset to original if empty
+      setEditingName(name);
+    }
+  };
 
   const handleAddValue = () => {
     if (!newValue.trim()) return;
     onAddValue(newValue);
     setNewValue("");
+  };
+
+  const handleDeleteEnumClick = () => {
+    // Check if enum is in use
+    if (usages && usages.length > 0) {
+      // Let the parent handle the error toast
+      onDelete();
+      return;
+    }
+    
+    // Otherwise, delete it
+    onDelete();
   };
 
   return (
@@ -43,7 +71,7 @@ export const EnumEditor: React.FC<EnumEditorProps> = ({
           variant="destructive" 
           size="sm" 
           className="h-7 text-xs"
-          onClick={onDelete}
+          onClick={handleDeleteEnumClick}
         >
           Delete ENUM
         </Button>
@@ -54,8 +82,9 @@ export const EnumEditor: React.FC<EnumEditorProps> = ({
         <Label className="text-xs font-medium">ENUM Type Name</Label>
         <Input 
           placeholder="Enter ENUM name" 
-          value={name}
-          onChange={(e) => onRename(e.target.value)}
+          value={editingName}
+          onChange={handleNameChange}
+          onBlur={handleNameBlur}
           className="h-8 text-sm"
         />
       </div>
@@ -121,7 +150,7 @@ export const EnumEditor: React.FC<EnumEditorProps> = ({
                   {usage.table}
                 </Badge>
                 <span className="text-muted-foreground">
-                  .{usage.column}
+                  .{usage.row}
                 </span>
               </div>
             ))}

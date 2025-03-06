@@ -8,7 +8,7 @@ export interface ColumnSchema {
   default?: string | null;
   foreignKey?: {
     table: string;
-    column: string;
+    row: string;
     onDelete?: string;
     onUpdate?: string;
   };

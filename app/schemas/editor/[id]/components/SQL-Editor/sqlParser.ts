@@ -5,7 +5,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     const newNodes: any[] = [];
     const newEdges: any[] = [];
     const tableMap: Record<string, string> = {};
-    const columnMap: Record<string, Record<string, string>> = {}; // table -> column -> nodeId
+    const columnMap: Record<string, Record<string, string>> = {}; // table -> row -> nodeId
     const enumTypes: any[] = [];
     
     // First, extract ENUM types
@@ -79,7 +79,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           continue;
         }
         
-        // Parse regular column definitions with enhanced regex for ENUM types and defaults
+        // Parse regular row definitions with enhanced regex for ENUM types and defaults
         const columnRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\([^)]*\))?)(?:\s+(.*))?$/i;
         const columnMatch = columnLine.match(columnRegex);
         
@@ -131,7 +131,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
             
             foreignKey = {
               table: targetTable,
-              column: targetColumn
+              row: targetColumn
             };
             
             // Check for ON DELETE/UPDATE clauses
@@ -152,7 +152,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
             });
           }
           
-          // Handle duplicate column names
+          // Handle duplicate row names
           if (columnNames.has(columnName.toLowerCase())) {
             let suffix = 1;
             let newName = `${columnName}_${suffix}`;

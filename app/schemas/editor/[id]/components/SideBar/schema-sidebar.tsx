@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Table, KeyRound, Hash, Type } from "lucide-react";
 import { SchemaNode, SchemaNodeData, EnumTypeNode } from "@/app/schemas/editor/[id]/types";
-import { BaseSidebar } from "./ui/sidebar";
+import { BaseSidebar } from "../../../../../../components/ui/sidebar";
 import { useSidebarStore } from "@/app/schemas/editor/[id]/store/sidebar-store";
 import { useTheme } from "next-themes";
 import { themeAwareStringToColor } from "@/lib/utils";
@@ -16,7 +15,7 @@ import { useSchemaStore } from "@/hooks/use-schema";
 // Import our new components
 import { DraggableElements } from "./schema/draggable-elements";
 import { TablesList } from "./schema/tables-list";
-import { ColumnEditor } from "./schema/column-editor";
+import { ColumnEditor } from "./row-editor";
 import { EnumEditor } from "./schema/enum-editor";
 import { useTableOperations } from "@/hooks/use-table-operations";
 import { useEnumOperations } from "@/hooks/use-enum-operations";
@@ -24,6 +23,7 @@ import { useEnumOperations } from "@/hooks/use-enum-operations";
 interface SidebarProps {
   selectedNode: SchemaNode | EnumTypeNode | null;
   onUpdateNode: (data: Partial<SchemaNodeData | any>) => void;
+  onDeleteNode: (node: SchemaNode | EnumTypeNode) => void;
   duplicateColumns?: Record<string, { isDuplicate: boolean; tables: string[] }>;
   nodes: (SchemaNode | EnumTypeNode)[];
   onNodeSelect: (node: SchemaNode | EnumTypeNode) => void;
@@ -49,12 +49,20 @@ const constraints = [
   { id: "index", label: "Index" },
 ];
 
-export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, onNodeSelect }: SidebarProps) {
+export function Sidebar({ 
+  selectedNode, 
+  onUpdateNode, 
+  onDeleteNode,
+  duplicateColumns, 
+  nodes, 
+  onNodeSelect 
+}: SidebarProps) {
   const { widths, updateWidth } = useSidebarStore();
   const { resolvedTheme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
+  const { schema } = useSchemaStore();
+  const enumTypes = schema.enumTypes || [];
   
-  // Use our custom hooks for table and enum operations
   const tableOperations = useTableOperations(
     selectedNode && (selectedNode.type === 'databaseSchema' || !selectedNode.type) ? selectedNode as SchemaNode : null,
     onUpdateNode
@@ -65,6 +73,13 @@ export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, o
     onUpdateNode,
     nodes
   );
+  
+  // Handle enum disconnection
+  const handleEnumDisconnect = (index: number) => {
+    if (tableOperations.disconnectFromEnum) {
+      tableOperations.disconnectFromEnum(index);
+    }
+  };
   
   // Determine if selected node is an enum node
   const isEnumNode = selectedNode?.type === 'enumType';
@@ -92,9 +107,19 @@ export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, o
               className="h-8 text-sm"
             />
           </div>
+          <div className="flex justify-end">
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              className="h-7 text-xs"
+              onClick={() => selectedNode && onDeleteNode(selectedNode)}
+            >
+              Delete Table
+            </Button>
+          </div>
         </div>
 
-        {/* Column Editor */}
+        {/* Row Editor */}
         {selectedNode && selectedNode.data?.schema && (
           <ColumnEditor 
             columns={selectedNode.data.schema}
@@ -105,6 +130,8 @@ export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, o
             duplicateColumns={duplicateColumns}
             dataTypes={dataTypes}
             constraints={constraints}
+            enumTypes={enumTypes}
+            onEnumDisconnect={handleEnumDisconnect}
           />
         )}
       </div>
@@ -145,10 +172,8 @@ export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, o
             }}
             onRemoveValue={enumOperations.removeEnumValue}
             onDelete={() => {
-              const success = enumOperations.deleteEnumType();
-              if (success) {
-                // Remove the node from the canvas
-                onNodeSelect(null);
+              if (selectedNode) {
+                onDeleteNode(selectedNode);
               }
             }}
           />
