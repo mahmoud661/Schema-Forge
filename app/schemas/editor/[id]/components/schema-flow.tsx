@@ -5,6 +5,7 @@ import "@/lib/schema-flow-styles.css";
 import { Toaster } from "sonner";
 
 import SchemaNode from "@/components/schema-node";
+import EnumNode from "@/components/enum-node";
 import { Sidebar } from "@/components/schema-sidebar";
 import { EdgeSidebar } from "./edge-sidebar";
 import { FlowControls } from "./flow-controls";
@@ -16,6 +17,7 @@ import { useSchemaNodes } from "../hooks/use-schema-nodes";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
+  enumType: EnumNode,
 };
 
 export function SchemaFlow() {
@@ -117,7 +119,7 @@ export function SchemaFlow() {
             nodeTypes={nodeTypes}
             fitView
             onDragOver={onDragOver}
-            onDrop={(event) => onDrop(event, setNodes, nodes)}
+            onDrop={onDrop}
             className="bg-muted/30"
             style={{ width: '100%', height: '100%' }}
             connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}

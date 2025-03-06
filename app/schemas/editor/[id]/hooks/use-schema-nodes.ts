@@ -1,19 +1,26 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { SchemaNode, SchemaNodeData } from "../types";
+import { SchemaNode, EnumTypeNode } from "../types";
+import { useSchemaStore } from "@/hooks/use-schema";
 
 function generateId() {
   return Date.now().toString();
 }
 
 export function useSchemaNodes() {
-  const [selectedNode, setSelectedNode] = useState<SchemaNode | null>(null);
+  const { 
+    schema, 
+    setSelectedNode, 
+    updateNodes, 
+    updateNodeData: updateNodeDataInStore,
+    addEnumType
+  } = useSchemaStore();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNode } = useReactFlow();
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: SchemaNode) => {
-    setSelectedNode(node);
-  }, []);
+  const onNodeClick = useCallback((event: React.MouseEvent, node: SchemaNode | EnumTypeNode) => {
+    setSelectedNode(node as SchemaNode);
+  }, [setSelectedNode]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -21,7 +28,7 @@ export function useSchemaNodes() {
   }, []);
 
   const onDrop = useCallback(
-    (event: React.DragEvent, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>, nodes: SchemaNode[]) => {
+    (event: React.DragEvent) => {
       event.preventDefault();
 
       if (!reactFlowWrapper.current) return;
@@ -34,33 +41,62 @@ export function useSchemaNodes() {
         y: event.clientY,
       });
 
-      const baseLabel = "New Table";
-      const label = getUniqueLabel(baseLabel, nodes);
-
-      const newNode = {
-        id: generateId(),
-        type: 'databaseSchema',
-        position,
-        data: {
-          label,
-          schema: [
-            { 
-              title: "id", 
-              type: "uuid",
-              constraints: ["primary", "notnull"] 
+      if (type === 'table') {
+        const baseLabel = "New Table";
+        const label = getUniqueLabel(baseLabel, schema.nodes);
+  
+        const newNode = {
+          id: generateId(),
+          type: 'databaseSchema',
+          position,
+          data: {
+            label,
+            schema: [
+              { 
+                title: "id", 
+                type: "uuid",
+                constraints: ["primary", "notnull"] 
+              },
+              { 
+                title: "created_at", 
+                type: "timestamp",
+                constraints: ["notnull"]
+              },
+            ],
+          },
+        };
+  
+        updateNodes([...schema.nodes, newNode as SchemaNode]);
+      } else if (type === 'enum') {
+        const baseName = "new_enum_type";
+        const name = getUniqueEnumName(baseName, schema.enumTypes || []);
+        
+        // Create enum values
+        const enumValues = ['value1', 'value2', 'value3'];
+        
+        // First add the enum type to store
+        try {
+          addEnumType({ name, values: enumValues });
+          
+          // Then create the visual node
+          const newEnumNode = {
+            id: `enum-${generateId()}`,
+            type: 'enumType',
+            position,
+            data: {
+              name,
+              values: enumValues
             },
-            { 
-              title: "created_at", 
-              type: "timestamp",
-              constraints: ["notnull"]
-            },
-          ],
-        },
-      };
-
-      setNodes((nds) => nds.concat(newNode as SchemaNode));
+          };
+          
+          // Update nodes in the flow
+          updateNodes([...schema.nodes, newEnumNode as EnumTypeNode]);
+        } catch (error) {
+          console.error("Error adding enum type:", error);
+        }
+      }
     },
-    [screenToFlowPosition]
+    [screenToFlowPosition, schema.nodes, schema.enumTypes, updateNodes, addEnumType]
   );
 
   const getUniqueLabel = (baseLabel: string, nodes: SchemaNode[]) => {
@@ -74,27 +110,19 @@ export function useSchemaNodes() {
     return label;
   };
 
-  const updateNodeData = useCallback((node: SchemaNode, nodeData: Partial<SchemaNodeData>, setNodes: React.Dispatch<React.SetStateAction<SchemaNode[]>>) => {
-    // Create an updated node with the new data
-    const updatedNodeData = { 
-      ...node.data, 
-      ...nodeData 
-    };
-    
-    // Update the nodes state
-    setNodes(nodes => nodes.map(n => 
-      n.id === node.id 
-        ? { ...n, data: updatedNodeData }
-        : n
-    ));
-    
-    // Update the selected node reference immediately with the new data
-    setSelectedNode(prev => {
-      if (prev && prev.id === node.id) {
-        return { ...prev, data: updatedNodeData };
-      }
-      return prev;
-    });
+  const getUniqueEnumName = (baseName: string, enumTypes: any[]) => {
+    let name = baseName;
+    let count = 1;
+    const existingNames = enumTypes.map(enumType => enumType.name);
+    while (existingNames.includes(name)) {
+      name = `${baseName}_${count}`;
+      count++;
+    }
+    return name;
+  };
+
+  const updateNodeData = useCallback((node: SchemaNode, nodeData: Partial<any>) => {
+    updateNodeDataInStore(node.id, nodeData);
     
     // Also ensure the ReactFlow internal state is in sync
     if (node.id) {
@@ -102,14 +130,14 @@ export function useSchemaNodes() {
       setTimeout(() => {
         const updatedNode = getNode(node.id);
         if (updatedNode) {
-          setSelectedNode(updatedNode as SchemaNode);
+          setSelectedNode(updatedNode as any);
         }
       }, 0);
     }
-  }, [getNode]);
+  }, [getNode, setSelectedNode, updateNodeDataInStore]);
 
   return {
-    selectedNode,
+    selectedNode: schema.selectedNode,
     reactFlowWrapper,
     onNodeClick,
     onDragOver,

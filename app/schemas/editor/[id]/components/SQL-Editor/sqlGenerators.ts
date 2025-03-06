@@ -1,5 +1,15 @@
-export const getQuotedTableName = (tableName: string): string => {
-  return tableName.includes(' ') ? `"${tableName}"` : `"${tableName.toLowerCase()}"`;
+export const getQuotedTableName = (tableName: string, useCaseSensitive: boolean = false): string => {
+  if (useCaseSensitive) {
+    return `"${tableName.replace(/"/g, '""')}"`;
+  }
+  return tableName;
+};
+
+export const getQuotedColumnName = (columnName: string, useCaseSensitive: boolean = false): string => {
+  if (useCaseSensitive) {
+    return `"${columnName.replace(/"/g, '""')}"`;
+  }
+  return columnName;
 };
 
 export const mapToBaseType = (sqlType: string): string => {
@@ -27,34 +37,100 @@ export const mapToBaseType = (sqlType: string): string => {
     'json': 'jsonb',
     'uuid': 'uuid'
   };
+  
+  // Check if it's an enum type
+  if (type.includes('enum_')) {
+    return type;
+  }
+  
   return typeMap[type] || 'varchar';
 };
 
+// Generate ENUM type definitions
+export const generateEnumTypes = (enumTypes: any[], useCaseSensitive: boolean = false) => {
+  if (!enumTypes || enumTypes.length === 0) {
+    return '';
+  }
+  
+  let sql = '-- ENUM Type Definitions\n';
+  enumTypes.forEach((enumType) => {
+    const typeName = useCaseSensitive ? `"${enumType.name}"` : enumType.name;
+    const enumValues = enumType.values.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+    sql += `CREATE TYPE ${typeName} AS ENUM (${enumValues});\n\n`;
+  });
+  
+  return sql;
+};
+
 // Table-specific SQL generators
-export const generatePostgresTable = (node: any) => {
-  const tableName = getQuotedTableName(node.data.label);
+export const generatePostgresTable = (node: any, useCaseSensitive: boolean = false, useInlineConstraints: boolean = true) => {
+  const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
+  const foreignKeys: string[] = [];
+  
   node.data.schema.forEach((column: any, index: number) => {
-    const columnName = column.title.includes(' ') ? `"${column.title}"` : `"${column.title}"`;
+    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
     sql += `  ${columnName} ${column.type}`;
+    
+    // Handle defaults
+    if (column.default) {
+      sql += ` DEFAULT ${column.default}`;
+    }
+    
+    // Add constraints inline
     if (column.constraints) {
       if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
       if (column.constraints.includes('notnull')) sql += ' NOT NULL';
       if (column.constraints.includes('unique')) sql += ' UNIQUE';
     }
+    
+    // Handle foreign keys (only if using inline constraints)
+    if (column.foreignKey && useInlineConstraints) {
+      const refTable = useCaseSensitive ? 
+        `"${column.foreignKey.table.replace(/"/g, '""')}"` : column.foreignKey.table;
+      const refColumn = useCaseSensitive ? 
+        `"${column.foreignKey.column.replace(/"/g, '""')}"` : column.foreignKey.column;
+      
+      sql += ` REFERENCES ${refTable}(${refColumn})`;
+      if (column.foreignKey.onDelete) {
+        sql += ` ON DELETE ${column.foreignKey.onDelete}`;
+      }
+      if (column.foreignKey.onUpdate) {
+        sql += ` ON UPDATE ${column.foreignKey.onUpdate}`;
+      }
+    } else if (column.foreignKey && !useInlineConstraints) {
+      // Store for later ALTER TABLE statements
+      foreignKeys.push({
+        column: columnName,
+        refTable: column.foreignKey.table,
+        refColumn: column.foreignKey.column,
+        onDelete: column.foreignKey.onDelete,
+        onUpdate: column.foreignKey.onUpdate
+      });
+    }
+    
     sql += index < node.data.schema.length - 1 ? ',\n' : '\n';
   });
+  
   sql += ');';
+  
+  // Create indexes for columns marked as index but not primary
   node.data.schema.forEach((column: any) => {
     if (column.constraints && column.constraints.includes('index') && !column.constraints.includes('primary')) {
-      sql += `\nCREATE INDEX idx_${node.data.label.toLowerCase().replace(/\s/g, '_')}_${column.title.replace(/\s/g, '_')} ON ${tableName} (${column.title.includes(' ') ? `"${column.title}"` : `"${column.title}"`});`;
+      const safeTableName = useCaseSensitive ? 
+        `"${node.data.label.replace(/"/g, '""')}"` : node.data.label.toLowerCase().replace(/\s/g, '_');
+      const safeColName = useCaseSensitive ?
+        `"${column.title.replace(/"/g, '""')}"` : column.title.replace(/\s/g, '_');
+      
+      sql += `\nCREATE INDEX idx_${safeTableName}_${safeColName} ON ${tableName} (${getQuotedColumnName(column.title, useCaseSensitive)});`;
     }
   });
+  
   return sql;
 };
 
-export const generateMySqlTable = (node: any) => {
-  const tableName = getQuotedTableName(node.data.label);
+export const generateMySqlTable = (node: any, useCaseSensitive: boolean = false) => {
+  const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
   node.data.schema.forEach((column: any, index: number) => {
     let mysqlType = column.type;
@@ -62,7 +138,7 @@ export const generateMySqlTable = (node: any) => {
     if (column.type === 'text') mysqlType = 'TEXT';
     if (column.type === 'int4') mysqlType = 'INT';
     if (column.type === 'timestamp') mysqlType = 'DATETIME';
-    const columnName = column.title.includes(' ') ? `"${column.title}"` : column.title;
+    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
     sql += `  ${columnName} ${mysqlType}`;
     if (column.constraints) {
       if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
@@ -80,8 +156,8 @@ export const generateMySqlTable = (node: any) => {
   return sql;
 };
 
-export const generateSqliteTable = (node: any) => {
-  const tableName = getQuotedTableName(node.data.label);
+export const generateSqliteTable = (node: any, useCaseSensitive: boolean = false) => {
+  const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
   node.data.schema.forEach((column: any, index: number) => {
     let sqliteType = column.type;
@@ -89,7 +165,7 @@ export const generateSqliteTable = (node: any) => {
     if (column.type === 'int4') sqliteType = 'INTEGER';
     if (column.type === 'timestamp') sqliteType = 'DATETIME';
     if (column.type === 'money') sqliteType = 'REAL';
-    const columnName = column.title.includes(' ') ? `"${column.title}"` : column.title;
+    const columnName = getQuotedColumnName(column.title, useCaseSensitive);
     sql += `  ${columnName} ${sqliteType}`;
     if (column.constraints) {
       if (column.constraints.includes('primary')) sql += ' PRIMARY KEY';
@@ -108,39 +184,80 @@ export const generateSqliteTable = (node: any) => {
 };
 
 // Main SQL Generator function
-export const generateSql = (type: string, schemaNodes: any[], schemaEdges: any[]): string => {
+export const generateSql = (
+  type: string, 
+  schemaNodes: any[], 
+  schemaEdges: any[],
+  enumTypes: any[] = [],
+  settings = { caseSensitiveIdentifiers: false, useInlineConstraints: true }
+): string => {
   let sql = "";
   sql += `-- Generated ${new Date().toLocaleString()} for ${type.toUpperCase()}\n`;
   sql += `-- Edit this SQL and apply changes to update your schema\n\n`;
+  
+  // First, generate all ENUM type definitions
+  if (enumTypes && enumTypes.length > 0 && type === "postgresql") {
+    sql += generateEnumTypes(enumTypes, settings.caseSensitiveIdentifiers);
+  }
+  
+  // Then, generate all table creation statements
   schemaNodes.forEach(node => {
-    if (type === "postgresql") {
-      sql += generatePostgresTable(node);
-    } else if (type === "mysql") {
-      sql += generateMySqlTable(node);
-    } else if (type === "sqlite") {
-      sql += generateSqliteTable(node);
+    // Only process database schema nodes, not enum nodes
+    if (node.type === "databaseSchema" || !node.type) {
+      if (type === "postgresql") {
+        sql += generatePostgresTable(node, settings.caseSensitiveIdentifiers, settings.useInlineConstraints);
+      } else if (type === "mysql") {
+        sql += generateMySqlTable(node, settings.caseSensitiveIdentifiers);
+      } else if (type === "sqlite") {
+        sql += generateSqliteTable(node, settings.caseSensitiveIdentifiers);
+      }
+      sql += "\n\n";
     }
-    sql += "\n\n";
   });
+  
+  // Only add ALTER TABLE statements if not using inline constraints OR for edges between tables
   if (schemaEdges.length > 0) {
-    sql += "-- Foreign Key Constraints\n";
-    schemaEdges.forEach(edge => {
-      // ...existing foreign key processing...
-      // For brevity, use same logic as before.
+    const fkEdges = schemaEdges.filter(edge => {
+      // Only include edges where both source and target are database tables (not enums)
       const sourceNode = schemaNodes.find(n => n.id === edge.source);
       const targetNode = schemaNodes.find(n => n.id === edge.target);
-      if (sourceNode && targetNode) {
-        const sourceColumn = edge.sourceHandle?.split('-')[1] || 'id';
-        const targetColumn = edge.targetHandle?.split('-')[1] || 'id';
-        const sourceTableName = getQuotedTableName(sourceNode.data.label);
-        const targetTableName = getQuotedTableName(targetNode.data.label);
-        if (type === "postgresql" || type === "mysql") {
-          sql += `ALTER TABLE ${sourceTableName} ADD CONSTRAINT fk_${sourceNode.data.label.toLowerCase().replace(/\s/g, '_')}_${targetNode.data.label.toLowerCase().replace(/\s/g, '_')} FOREIGN KEY ("${sourceColumn}") REFERENCES ${targetTableName}("${targetColumn}");\n`;
-        } else if (type === "sqlite") {
-          sql += `-- For SQLite, foreign keys would be defined in the CREATE TABLE statement\n`;
-        }
-      }
+      return sourceNode && targetNode && 
+            (sourceNode.type === "databaseSchema" || !sourceNode.type) && 
+            (targetNode.type === "databaseSchema" || !targetNode.type);
     });
+    
+    if (fkEdges.length > 0 && !settings.useInlineConstraints) {
+      sql += "-- Foreign Key Constraints\n";
+      fkEdges.forEach(edge => {
+        const sourceNode = schemaNodes.find(n => n.id === edge.source);
+        const targetNode = schemaNodes.find(n => n.id === edge.target);
+        
+        if (!sourceNode || !targetNode) return;
+        
+        // Parse the handle format to get the column name
+        const sourceColumn = edge.sourceHandle?.split('-').slice(1).join('-') || 'id';
+        const targetColumn = edge.targetHandle?.split('-').slice(1).join('-') || 'id';
+        
+        const sourceTableName = getQuotedTableName(sourceNode.data.label, settings.caseSensitiveIdentifiers);
+        const targetTableName = getQuotedTableName(targetNode.data.label, settings.caseSensitiveIdentifiers);
+        const sourceColumnName = getQuotedColumnName(sourceColumn, settings.caseSensitiveIdentifiers);
+        const targetColumnName = getQuotedColumnName(targetColumn, settings.caseSensitiveIdentifiers);
+        
+        // Create a constraint name that's safe for all SQL dialects
+        const constraintName = settings.caseSensitiveIdentifiers 
+          ? `"fk_${sourceNode.data.label.replace(/\s/g, '_')}_${sourceColumn.replace(/\s/g, '_')}"`
+          : `fk_${sourceNode.data.label.toLowerCase().replace(/\s/g, '_')}_${sourceColumn.toLowerCase().replace(/\s/g, '_')}`;
+        
+        if (type === "postgresql" || type === "mysql") {
+          sql += `ALTER TABLE ${sourceTableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName});\n`;
+        } else if (type === "sqlite") {
+          // SQLite doesn't support ALTER TABLE for foreign keys
+          sql += `-- For SQLite, foreign keys should be defined in the CREATE TABLE statement\n`;
+          sql += `-- Example: FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName})\n`;
+        }
+      });
+    }
   }
+  
   return sql;
 };

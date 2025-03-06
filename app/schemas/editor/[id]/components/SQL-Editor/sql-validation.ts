@@ -153,34 +153,60 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
   const alterStatements = statements.filter(stmt => stmt.toUpperCase().startsWith('ALTER TABLE'));
   
   for (const alter of alterStatements) {
-    const tableMatch = /ALTER\s+TABLE\s+(?:`|"|')?([^`"'\s]+)(?:`|"|')?/i.exec(alter);
+    const tableMatch = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?/i.exec(alter);
     if (tableMatch) {
-      const tableName = tableMatch[1].toLowerCase();
-      if (!tableNames.has(tableName)) {
-        // Only warn, don't block
+      const tableName = tableMatch[1].replace(/^["'`]|["'`]$/g, '').toLowerCase();
+      
+      // Check if the table name exists (considering case insensitivity for SQL standard)
+      const tableExists = Array.from(tableNames).some(name => 
+        name.toLowerCase() === tableName
+      );
+      
+      if (!tableExists) {
         errors.push(`Warning: ALTER TABLE references table "${tableName}" which is not defined in this SQL`);
       }
     }
     
     // Check for foreign key references to non-existent tables in ALTER TABLE statements
     if (alter.toUpperCase().includes('FOREIGN KEY') && alter.toUpperCase().includes('REFERENCES')) {
-      const refMatches = alter.match(/REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?/gi);
+      // Extract the referenced table using a more permissive regex that handles spaces in quotes
+      const refRegex = /REFERENCES\s+(?:`|"|')?([^`"'()]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"'()]+)(?:`|"|')?\s*\)/gi;
+      let refMatch;
       
-      if (refMatches) {
-        for (const refMatch of refMatches) {
-          const referencedTable = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?/i.exec(refMatch)?.[1]?.toLowerCase();
-          
-          if (referencedTable && !tableNames.has(referencedTable)) {
-            // Only warn, don't block
-            errors.push(`Warning: Foreign key in ALTER TABLE references table "${referencedTable}" which is not defined in this SQL`);
+      while ((refMatch = refRegex.exec(alter)) !== null) {
+        const referencedTable = refMatch[1].replace(/^["'`]|["'`]$/g, '');
+        const referencedColumn = refMatch[2].replace(/^["'`]|["'`]$/g, '');
+        
+        // Check if the table name exists (considering case insensitivity)
+        const tableExists = Array.from(tableNames).some(name => 
+          name.toLowerCase() === referencedTable.toLowerCase()
+        );
+        
+        if (!tableExists) {
+          errors.push(`Warning: Foreign key in ALTER TABLE references table "${referencedTable}" which is not defined in this SQL`);
+        } else {
+          // Referencing a primary key is always valid, don't warn about that
+          if (referencedColumn.toLowerCase() === 'id') {
+            // This is typically valid - remove any existing warnings about this
+            const idxToRemove = errors.findIndex(err => 
+              err.includes(`${referencedTable}`) && err.includes('not defined')
+            );
+            if (idxToRemove >= 0) {
+              errors.splice(idxToRemove, 1);
+            }
           }
         }
       }
     }
   }
   
+  // For foreign key constraints, only show critical errors
+  const criticalErrors = errors.filter(err => 
+    !err.startsWith('Warning:')
+  );
+  
   return {
-    isValid: errors.length === 0,
+    isValid: criticalErrors.length === 0,
     errors
   };
 }
@@ -193,27 +219,59 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
 export function fixCommonSqlIssues(sql: string): string {
   let fixedSql = sql;
   
+  // Don't add extra commas to section headers like "-- Foreign Key Constraints"
+  const sectionHeaders = fixedSql.match(/--\s*[\w\s]+/g) || [];
+  const sectionHeaderMap = {};
+  
+  // First, protect comments and ALTER TABLE statements from being modified
+  sectionHeaders.forEach(header => {
+    const placeholder = `__SECTION_HEADER_${Math.random().toString(36).substring(2)}__`;
+    sectionHeaderMap[placeholder] = header;
+    fixedSql = fixedSql.replace(header, placeholder);
+  });
+  
+  // Protect ALTER TABLE statements
+  const alterTableStatements = fixedSql.match(/ALTER\s+TABLE[^;]+;/gi) || [];
+  const alterTableMap = {};
+  
+  alterTableStatements.forEach((statement) => {
+    const placeholder = `__ALTER_TABLE_${Math.random().toString(36).substring(2)}__`;
+    alterTableMap[placeholder] = statement;
+    fixedSql = fixedSql.replace(statement, placeholder);
+  });
+  
   // Fix table names with spaces by adding quotes if missing
   const tableNameRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+\s+\w+)(?!\s*`|"|')\s*\(/gi;
   fixedSql = fixedSql.replace(tableNameRegex, 'CREATE TABLE "$1" (');
   
-  // Fix missing commas between column definitions
-  const missingCommaRegex = /(\w+\s+\w+(?:\(\d+\))?(?:\s+(?:NOT NULL|PRIMARY KEY|UNIQUE))?)(\s*\n\s*)(\w+\s+\w+)/gi;
-  fixedSql = fixedSql.replace(missingCommaRegex, '$1,$2$3');
+  // Fix missing commas between column definitions - but only within CREATE TABLE statements
+  const createTableBlocks = fixedSql.match(/CREATE\s+TABLE[^;]+;/gi) || [];
   
-  // Removed extraneous replacement for adding quotes to column names
+  for (const block of createTableBlocks) {
+    const fixedBlock = block.replace(
+      /(\w+\s+\w+(?:\(\d+\))?(?:\s+(?:NOT NULL|PRIMARY KEY|UNIQUE))?)(\s*\n\s*)(\w+\s+\w+)/gi, 
+      '$1,$2$3'
+    );
+    fixedSql = fixedSql.replace(block, fixedBlock);
+  }
   
   // Make sure quoted columns have closing quotes
   const missingCloseQuoteRegex = /\("(\w+)(?!")(\s+\w+)/g;
   fixedSql = fixedSql.replace(missingCloseQuoteRegex, '("$1"$2');
   
-  // Removed replacement for improper PRIMARY KEY syntax to preserve inline definitions
-  // const improperPkRegex = /PRIMARY KEY\s+(\w+)/gi;
-  // fixedSql = fixedSql.replace(improperPkRegex, 'PRIMARY KEY ($1)');
+  // Fix foreign key references with improper quoting
+  const improperRefQuoteRegex = /REFERENCES\s+"([^"]+)"\s*\(\s*"([^"]+)"\s*\)/g;
+  fixedSql = fixedSql.replace(improperRefQuoteRegex, 'REFERENCES "$1"("$2")');
   
-  // Ensure FOREIGN KEY constraints have proper syntax
-  const improperFkRegex = /FOREIGN KEY\s+(\w+)/gi;
-  fixedSql = fixedSql.replace(improperFkRegex, 'FOREIGN KEY ($1)');
+  // Put protected sections back
+  Object.entries(sectionHeaderMap).forEach(([placeholder, original]) => {
+    fixedSql = fixedSql.replace(placeholder, original);
+  });
+  
+  // Put ALTER TABLE statements back
+  Object.entries(alterTableMap).forEach(([placeholder, original]) => {
+    fixedSql = fixedSql.replace(placeholder, original);
+  });
   
   return fixedSql;
 }

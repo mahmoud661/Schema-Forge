@@ -8,7 +8,12 @@
   border: 2px solid white;
 }
 
-
+/* Dark mode handle borders */
+@media (prefers-color-scheme: dark) {
+  .react-flow__handle {
+    border-color: #374151;
+  }
+}
 
 /* Left handles style */
 .react-flow__handle-left {
@@ -20,18 +25,81 @@
   background: #10b981 !important;
 }
 
-/* Edge styling */
+/* Dark mode handle colors */
+@media (prefers-color-scheme: dark) {
+  .react-flow__handle-left {
+    background: #60a5fa !important;
+  }
+  
+  .react-flow__handle-right {
+    background: #34d399 !important;
+  }
+}
+
+/* Edge styling with dark mode support */
 .react-flow__edge-path {
   stroke-width: 2;
 }
 
-/* Making connection path visible */
+:root {
+  --edge-color: #3b82f6;
+}
+
+[data-theme="dark"] {
+  --edge-color: #60a5fa;
+}
+
 .react-flow__connection-path {
   stroke-width: 2;
-  stroke: #3b82f6;
+  stroke: var(--edge-color);
 }
 
 /* Hover effect for table rows */
 .react-flow__node .hover\:bg-muted\/50:hover {
   background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Add collapsible animations */
+@keyframes collapsibleDown {
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
+}
+
+@keyframes collapsibleUp {
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
+}
+
+.animate-collapsible-down {
+  animation: collapsibleDown 200ms ease-out;
+}
+
+.animate-collapsible-up {
+  animation: collapsibleUp 200ms ease-out;
+}
+
+/* Add scrollbar styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-muted-foreground\/20::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.2);
+  border-radius: 8px;
+}
+
+/* Improve dark mode visibility for scrollbars */
+@media (prefers-color-scheme: dark) {
+  .scrollbar-thumb-muted-foreground\/20::-webkit-scrollbar-thumb {
+    background-color: rgba(200, 200, 200, 0.2);
+  }
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }

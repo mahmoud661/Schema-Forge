@@ -3,25 +3,47 @@
 import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Settings } from "lucide-react";
 import { toast } from "sonner";
-import { useDebounce } from "use-debounce";
 import { BaseSidebar } from "@/components/ui/sidebar";
 import { useSidebarStore } from "../store/sidebar-store";
 import { generateSql } from "./SQL-Editor/sqlGenerators";
 import { parseSqlToSchema } from "./SQL-Editor/sqlParser";
 import EditorComponent from "./SQL-Editor/EditorComponent";
-import { validateSqlSyntax, fixCommonSqlIssues } from "./SQL-Editor/sql-validation"; // unchanged
+import { validateSqlSyntax, fixCommonSqlIssues } from "./SQL-Editor/sql-validation";
+import { useSchemaStore } from "@/hooks/use-schema";
 import { SchemaNode } from "../types";
-// Types
-interface SqlEditorProps {
-  nodes: SchemaNode[];
-  edges: any[];
-  onUpdateSchema: (nodes: SchemaNode[], edges: any[]) => void;
-}
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+// Default settings to use if schema settings are undefined
+const defaultSettings = {
+  caseSensitiveIdentifiers: false,
+  useInlineConstraints: true
+};
 
 // Main SQL Editor Component
-export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
+export function SqlEditor() {
+  const { 
+    schema, 
+    updateNodes, 
+    updateEdges, 
+    updateCode, 
+    updateSettings,
+    updateSchema
+  } = useSchemaStore();
+  
+  // Safely access schema properties with defaults for new properties
+  const nodes = schema.nodes || [];
+  const edges = schema.edges || [];
+  const enumTypes = schema.enumTypes || [];
+  const settings = schema.settings || defaultSettings;
+  
   // New state to store last applied SQL
   const [appliedSql, setAppliedSql] = useState<string>("");
   const [dbType, setDbType] = useState<string>("postgresql");
@@ -32,22 +54,50 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
   const { widths, updateWidth } = useSidebarStore();
   
+  // On mount, initialize settings if they don't exist
+  useEffect(() => {
+    if (!schema.settings) {
+      updateSettings(defaultSettings);
+    }
+  }, [schema.settings, updateSettings]);
+  
   // On mount, generate initial SQL once and store it
   useEffect(() => {
-    const initialSql = generateSql(dbType, nodes, edges);
+    const initialSql = generateSql(dbType, nodes, edges, enumTypes, settings);
     setAppliedSql(initialSql);
     setSqlContent(initialSql);
     setEditableSql(initialSql);
-  }, []); // run only once
+  }, [dbType, enumTypes, settings]); // Run when dependencies change
   
-  // Remove regeneration on dependency changes so that appliedSql is preserved
-  
+  // Regenerate SQL when database type changes or settings change
+  useEffect(() => {
+    if (!isEditing) {
+      const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
+      setSqlContent(newSql);
+      setAppliedSql(newSql);
+    }
+  }, [dbType, nodes, edges, enumTypes, settings, isEditing]);
+
   // Effect for live updates when SQL changes
   useEffect(() => {
     if (isEditing && liveEditMode && editableSql) {
       handleApplySqlChangesInternal(editableSql, true);
     }
   }, [editableSql, liveEditMode, isEditing]);
+
+  const handleToggleCaseSensitive = () => {
+    updateSettings({ 
+      ...settings,
+      caseSensitiveIdentifiers: !settings.caseSensitiveIdentifiers 
+    });
+  };
+
+  const handleToggleInlineConstraints = () => {
+    updateSettings({ 
+      ...settings,
+      useInlineConstraints: !settings.useInlineConstraints 
+    });
+  };
 
   const handleDownload = () => {
     const blob = new Blob([isEditing ? editableSql : sqlContent], { type: 'text/plain' });
@@ -59,6 +109,19 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleUpdateSchema = (newNodes: SchemaNode[], newEdges: any[], newEnumTypes: any[] = []) => {
+    updateNodes(newNodes);
+    updateEdges(newEdges);
+    
+    // Update enum types if provided
+    if (newEnumTypes.length > 0) {
+      updateSchema({ enumTypes: newEnumTypes });
+    }
+    
+    // Also update the SQL code in the store
+    updateCode(editableSql);
   };
 
   const handleApplySqlChangesInternal = (sql: string, isLiveUpdate = false) => {
@@ -83,16 +146,24 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
       
       const validation = validateSqlSyntax(processedSql);
       if (!validation.isValid) {
+        // Only treat true errors (not warnings) as critical
         const criticalErrors = validation.errors.filter(err => 
-          err.includes("cannot be empty") || 
-          err.includes("must contain at least one CREATE TABLE")
+          !err.startsWith('Warning:') && (
+            err.includes("cannot be empty") || 
+            err.includes("must contain at least one CREATE TABLE")
+          )
         );
+        
         if (criticalErrors.length > 0) {
           setError(criticalErrors[0]);
           return;
-        } else if (!isLiveUpdate) {
-          console.warn("SQL potential issues:", validation.errors);
-          toast.warning("SQL has potential issues but will be processed anyway");
+        } else if (!isLiveUpdate && validation.errors.length > 0) {
+          // Log warnings but don't block execution
+          const warnings = validation.errors.filter(err => err.startsWith('Warning:'));
+          if (warnings.length > 0) {
+            console.warn("SQL warnings:", warnings);
+            // Don't show toast for warnings anymore, they're usually false positives
+          }
         }
       }
       
@@ -102,15 +173,31 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
           console.log("Parsed schema:", { 
             tables: parsedSchema.nodes.map(n => n.data.label),
             edges: parsedSchema.edges.length,
+            enumTypes: parsedSchema.enumTypes?.length || 0,
+            edgeDetails: parsedSchema.edges.map(e => ({
+              source: e.source,
+              target: e.target,
+              sourceHandle: e.sourceHandle,
+              targetHandle: e.targetHandle
+            })),
             sql: processedSql 
           });
-          onUpdateSchema(parsedSchema.nodes, parsedSchema.edges);
+          
+          handleUpdateSchema(
+            parsedSchema.nodes, 
+            parsedSchema.edges, 
+            parsedSchema.enumTypes || []
+          );
+          
+          // Update SQL stored in state
+          updateCode(processedSql);
+          
           if (!isLiveUpdate) {
             // Save the user's SQL exactly as applied
             setAppliedSql(processedSql);
             setSqlContent(processedSql);
             setIsEditing(false);
-            toast.success("Schema updated successfully");
+            toast.success(`Schema updated successfully (${parsedSchema.nodes.length} tables, ${parsedSchema.edges.length} relationships, ${parsedSchema.enumTypes?.length || 0} enum types)`);
           }
         }
       } catch (parseError: any) {
@@ -143,16 +230,85 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
   // Header actions for the BaseSidebar
   const headerActions = (
     <>
-      <Select value={dbType} onValueChange={setDbType}>
-        <SelectTrigger className="w-[140px]">
-          <SelectValue placeholder="Database Type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="postgresql">PostgreSQL</SelectItem>
-          <SelectItem value="mysql">MySQL</SelectItem>
-          <SelectItem value="sqlite">SQLite</SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-2">
+        <Select value={dbType} onValueChange={setDbType}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Database Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="postgresql">PostgreSQL</SelectItem>
+            <SelectItem value="mysql">MySQL</SelectItem>
+            <SelectItem value="sqlite">SQLite</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="icon" title="SQL Settings">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <div className="space-y-4">
+              <h4 className="font-medium">SQL Settings</h4>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="case-sensitive">Case-sensitive identifiers</Label>
+                  <div className="text-xs text-muted-foreground">
+                    Use quotes around table and column names
+                  </div>
+                </div>
+                <Switch
+                  id="case-sensitive"
+                  checked={settings.caseSensitiveIdentifiers}
+                  onCheckedChange={handleToggleCaseSensitive}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="inline-constraints">Use inline constraints</Label>
+                  <div className="text-xs text-muted-foreground">
+                    Add foreign key constraints inside CREATE TABLE instead of ALTER TABLE
+                  </div>
+                </div>
+                <Switch
+                  id="inline-constraints"
+                  checked={settings.useInlineConstraints}
+                  onCheckedChange={handleToggleInlineConstraints}
+                />
+              </div>
+              
+              {dbType === "postgresql" && (
+                <div className="pt-2">
+                  <h5 className="text-sm font-medium mb-2">ENUM Types ({enumTypes.length})</h5>
+                  <div className="max-h-24 overflow-y-auto text-xs">
+                    {enumTypes.length > 0 ? (
+                      <ul className="space-y-1">
+                        {enumTypes.map((enumType, index) => (
+                          <li key={index} className="flex justify-between items-center">
+                            <span className="font-mono">{enumType.name}</span>
+                            <span className="text-muted-foreground">
+                              ({enumType.values.length} values)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-muted-foreground italic">No ENUM types defined</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Add ENUM types using CREATE TYPE in the SQL editor
+                  </p>
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+      
       <div className="flex gap-2">
         {!isEditing ? (
           <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
@@ -196,7 +352,12 @@ export function SqlEditor({ nodes, edges, onUpdateSchema }: SqlEditorProps) {
     >
       {error && (
         <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive overflow-scroll">
-          {error}
+          <p className="mb-2 font-medium">{error}</p>
+          <details className="text-xs opacity-80">
+            <summary>Show troubleshooting info</summary>
+            <p className="mt-2">If your foreign keys are not showing up, make sure the table names and column names match exactly (including case).</p>
+            <p className="mt-1">The ALTER TABLE statement should look like: ALTER TABLE "Table1" ADD CONSTRAINT name FOREIGN KEY ("column") REFERENCES "Table2"("column");</p>
+          </details>
         </div>
       )}
       

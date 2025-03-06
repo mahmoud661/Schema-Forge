@@ -5,26 +5,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Table, KeyRound, Hash, Type, Plus, Trash2, AlertCircle, ChevronDown } from "lucide-react";
-import { SchemaNode, SchemaNodeData } from "@/app/schemas/editor/[id]/types";
+import { Table, KeyRound, Hash, Type } from "lucide-react";
+import { SchemaNode, SchemaNodeData, EnumTypeNode } from "@/app/schemas/editor/[id]/types";
 import { BaseSidebar } from "./ui/sidebar";
-import { useSidebarStore, SidebarType } from "@/app/schemas/editor/[id]/store/sidebar-store";
-import { Alert, AlertDescription } from "./ui/alert";
-import { toast } from "sonner";
-import { 
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { useSidebarStore } from "@/app/schemas/editor/[id]/store/sidebar-store";
+import { useTheme } from "next-themes";
+import { themeAwareStringToColor } from "@/lib/utils";
+import { useSchemaStore } from "@/hooks/use-schema";
+
+// Import our new components
+import { DraggableElements } from "./schema/draggable-elements";
+import { TablesList } from "./schema/tables-list";
+import { ColumnEditor } from "./schema/column-editor";
+import { EnumEditor } from "./schema/enum-editor";
+import { useTableOperations } from "@/hooks/use-table-operations";
+import { useEnumOperations } from "@/hooks/use-enum-operations";
 
 interface SidebarProps {
-  selectedNode: SchemaNode | null;
-  onUpdateNode: (data: Partial<SchemaNodeData>) => void;
+  selectedNode: SchemaNode | EnumTypeNode | null;
+  onUpdateNode: (data: Partial<SchemaNodeData | any>) => void;
   duplicateColumns?: Record<string, { isDuplicate: boolean; tables: string[] }>;
-  nodes: SchemaNode[];
-  onNodeSelect: (node: SchemaNode) => void;
+  nodes: (SchemaNode | EnumTypeNode)[];
+  onNodeSelect: (node: SchemaNode | EnumTypeNode) => void;
 }
 
 const dataTypes = [
@@ -47,88 +49,66 @@ const constraints = [
   { id: "index", label: "Index" },
 ];
 
-// Function to generate a unique color based on string
-const stringToColor = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = hash % 360;
-  return `hsl(${hue}, 70%, 60%)`;
-};
-
 export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, onNodeSelect }: SidebarProps) {
-  const [draggedType, setDraggedType] = useState<string | null>(null);
   const { widths, updateWidth } = useSidebarStore();
-  const [openTableId, setOpenTableId] = useState<string | null>(null);
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
+  
+  // Use our custom hooks for table and enum operations
+  const tableOperations = useTableOperations(
+    selectedNode && (selectedNode.type === 'databaseSchema' || !selectedNode.type) ? selectedNode as SchemaNode : null,
+    onUpdateNode
+  );
+  
+  const enumOperations = useEnumOperations(
+    selectedNode?.type === 'enumType' ? selectedNode as EnumTypeNode : null,
+    onUpdateNode,
+    nodes
+  );
+  
+  // Determine if selected node is an enum node
+  const isEnumNode = selectedNode?.type === 'enumType';
+  const isTableNode = selectedNode && (selectedNode.type === 'databaseSchema' || !selectedNode.type);
+  
+  // Get enum usages if an enum node is selected
+  const enumUsages = isEnumNode ? enumOperations.findColumnsUsingEnum() : [];
 
-  const onDragStart = (event: React.DragEvent, nodeType: string) => {
-    event.dataTransfer.setData('application/reactflow', nodeType);
-    event.dataTransfer.effectAllowed = 'move';
-    setDraggedType(nodeType);
-  };
+  // Render table content only when a table is selected
+  const renderTableContent = (node: SchemaNode) => {
+    if (node.id !== selectedNode?.id) return null;
 
-  const onDragEnd = () => {
-    setDraggedType(null);
-  };
+    return (
+      <div className="mt-2 pl-4 border-l-2 space-y-4" style={{ 
+        borderColor: themeAwareStringToColor(node.data?.label || 'Table', { darkMode: isDarkMode }) 
+      }}>
+        {/* Table Properties */}
+        <div className="space-y-4 mb-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Table Name</Label>
+            <Input 
+              placeholder="Enter table name" 
+              value={node.data?.label || ''}
+              onChange={(e) => onUpdateNode({ label: e.target.value })}
+              className="h-8 text-sm"
+            />
+          </div>
+        </div>
 
-  const addColumn = () => {
-    if (!selectedNode) return;
-    const columnId = Date.now().toString();
-    onUpdateNode({
-      schema: [
-        ...(selectedNode.data?.schema || []),
-        { title: "new_column", type: "varchar", constraints: [], id: columnId }
-      ]
-    });
-  };
-
-  const updateColumn = (index: number, field: string, value: any) => {
-    if (!selectedNode) return;
-    const newSchema = [...(selectedNode.data?.schema || [])];
-    
-    if (field === 'title') {
-      const existingTitles = selectedNode.data.schema
-        .map(c => c.title)
-        .filter((t, i) => i !== index);
-      
-      if (existingTitles.includes(value)) {
-        toast.warning(`Column name "${value}" already exists in this table`);
-        value = `${value}_${index}`;
-      }
-    }
-    
-    newSchema[index] = { ...newSchema[index], [field]: value };
-    onUpdateNode({ schema: newSchema });
-  };
-
-  const removeColumn = (index: number) => {
-    if (!selectedNode) return;
-    const newSchema = [...(selectedNode.data?.schema || [])];
-    newSchema.splice(index, 1);
-    onUpdateNode({ schema: newSchema });
-  };
-
-  const toggleConstraint = (index: number, constraint: string) => {
-    if (!selectedNode) return;
-    const newSchema = [...(selectedNode.data?.schema || [])];
-    const column = newSchema[index];
-    const constraints = column.constraints || [];
-    const hasConstraint = constraints.includes(constraint);
-    
-    newSchema[index] = {
-      ...column,
-      constraints: hasConstraint 
-        ? constraints.filter(c => c !== constraint)
-        : [...constraints, constraint]
-    };
-    
-    onUpdateNode({ schema: newSchema });
-  };
-
-  const handleTableClick = (node: SchemaNode) => {
-    onNodeSelect(node);
-    setOpenTableId(node.id === openTableId ? null : node.id);
+        {/* Column Editor */}
+        {selectedNode && selectedNode.data?.schema && (
+          <ColumnEditor 
+            columns={selectedNode.data.schema}
+            onAddColumn={tableOperations.addColumn}
+            onUpdateColumn={tableOperations.updateColumn}
+            onRemoveColumn={tableOperations.removeColumn}
+            onToggleConstraint={tableOperations.toggleConstraint}
+            duplicateColumns={duplicateColumns}
+            dataTypes={dataTypes}
+            constraints={constraints}
+          />
+        )}
+      </div>
+    );
   };
 
   return (
@@ -138,155 +118,41 @@ export function Sidebar({ selectedNode, onUpdateNode, duplicateColumns, nodes, o
       onWidthChange={(width) => updateWidth('schema', width)}
     >
       <div className="p-4 flex flex-col gap-4">
-        <div>
-          <h3 className="font-semibold mb-2">Add Table</h3>
-          <div
-            className="p-3 border rounded-lg cursor-move transition-colors hover:bg-muted"
-            draggable
-            onDragStart={(e) => onDragStart(e, 'databaseSchema')}
-            onDragEnd={onDragEnd}
-          >
-            <div className="flex items-center gap-2">
-              <Table className="h-4 w-4" />
-              <span>Database Table</span>
-            </div>
-          </div>
-        </div>
+        {/* Draggable Schema Elements */}
+        <DraggableElements />
 
         <Separator />
 
-        {/* Tables List */}
-        <div className="space-y-2">
-          <h3 className="font-semibold">Tables</h3>
-          <div className="space-y-2">
-            {nodes.map((node) => (
-              <Collapsible
-                key={node.id}
-                open={openTableId === node.id}
-                onOpenChange={() => handleTableClick(node)}
-              >
-                <CollapsibleTrigger className="w-full">
-                  <div 
-                    className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                    style={{
-                      borderColor: stringToColor(node.data.label),
-                      backgroundColor: `${stringToColor(node.data.label)}10`
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: stringToColor(node.data.label) }}
-                      />
-                      <span className="font-medium">{node.data.label}</span>
-                    </div>
-                    <ChevronDown 
-                      className={`h-4 w-4 transition-transform ${openTableId === node.id ? 'transform rotate-180' : ''}`}
-                    />
-                  </div>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  {node.id === selectedNode?.id && (
-                    <div className="mt-4 pl-4 border-l-2" style={{ borderColor: stringToColor(node.data.label) }}>
-                      {/* Table Properties */}
-                      <div className="space-y-4 mb-4">
-                        <div className="space-y-2">
-                          <Label>Table Name</Label>
-                          <Input 
-                            placeholder="Enter table name" 
-                            value={selectedNode.data?.label || ''}
-                            onChange={(e) => onUpdateNode({ label: e.target.value })}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Columns */}
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-medium">Columns</h4>
-                          <Button onClick={addColumn} size="sm" variant="outline">
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add Column
-                          </Button>
-                        </div>
-
-                        <div className="space-y-4">
-                          {selectedNode.data?.schema.map((column: any, index: number) => {
-                            const columnKey = column.id || `column-${index}`;
-                            const isDuplicate = duplicateColumns?.[column.title]?.isDuplicate;
-                            
-                            return (
-                              <div key={columnKey} className="space-y-2 p-3 border rounded-lg">
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    placeholder="Column name"
-                                    value={column.title}
-                                    onChange={(e) => updateColumn(index, 'title', e.target.value)}
-                                    className={`flex-1 ${isDuplicate ? 'border-yellow-500' : ''}`}
-                                  />
-                                  <Select
-                                    value={column.type}
-                                    onValueChange={(value) => updateColumn(index, 'type', value)}
-                                  >
-                                    <SelectTrigger className="w-[140px]">
-                                      <SelectValue placeholder="Data Type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {dataTypes.map((type) => (
-                                        <SelectItem key={type.id} value={type.id}>
-                                          <div className="flex items-center gap-2">
-                                            <type.icon className="h-4 w-4" />
-                                            {type.label}
-                                          </div>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => removeColumn(index)}
-                                    className="text-destructive hover:text-destructive/90"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-
-                                {isDuplicate && (
-                                  <Alert variant="warning" className="py-2 px-3">
-                                    <AlertCircle className="h-4 w-4" />
-                                    <AlertDescription className="text-xs">
-                                      Column name duplicated in: {duplicateColumns[column.title].tables.join(', ')}
-                                    </AlertDescription>
-                                  </Alert>
-                                )}
-
-                                <div className="flex flex-wrap gap-3 pt-2">
-                                  {constraints.map((constraint) => (
-                                    <div key={`${columnKey}-${constraint.id}`} className="flex items-center gap-2">
-                                      <Switch
-                                        checked={(column.constraints || []).includes(constraint.id)}
-                                        onCheckedChange={() => toggleConstraint(index, constraint.id)}
-                                        id={`${columnKey}-${constraint.id}`}
-                                      />
-                                      <Label htmlFor={`${columnKey}-${constraint.id}`} className="text-sm">
-                                        {constraint.label}
-                                      </Label>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CollapsibleContent>
-              </Collapsible>
-            ))}
-          </div>
-        </div>
+        {/* Tables List with tables and enum types */}
+        <TablesList 
+          nodes={nodes}
+          selectedNode={selectedNode}
+          onNodeSelect={onNodeSelect}
+          isDarkMode={isDarkMode}
+          tableContent={renderTableContent}
+        />
+        
+        {/* ENUM Editor - Show when an ENUM node is selected */}
+        {isEnumNode && (
+          <EnumEditor
+            name={selectedNode.data?.name || ''}
+            values={selectedNode.data?.values || []}
+            usages={enumUsages}
+            onRename={enumOperations.renameEnumType}
+            onAddValue={(value) => {
+              enumOperations.setNewEnumValue(value);
+              enumOperations.addEnumValue();
+            }}
+            onRemoveValue={enumOperations.removeEnumValue}
+            onDelete={() => {
+              const success = enumOperations.deleteEnumType();
+              if (success) {
+                // Remove the node from the canvas
+                onNodeSelect(null);
+              }
+            }}
+          />
+        )}
       </div>
     </BaseSidebar>
   );
