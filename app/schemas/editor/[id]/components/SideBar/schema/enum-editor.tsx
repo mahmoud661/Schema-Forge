@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Type, X, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface EnumEditorProps {
   name: string;
@@ -26,7 +26,12 @@ export const EnumEditor: React.FC<EnumEditorProps> = ({
 }) => {
   const [newValue, setNewValue] = useState("");
   const [editingName, setEditingName] = useState(name);
-  
+
+  // Sync editingName when prop 'name' changes
+  useEffect(() => {
+    setEditingName(name);
+  }, [name]);
+
   // Handle name change with proper state management to avoid UI flicker
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditingName(e.target.value);

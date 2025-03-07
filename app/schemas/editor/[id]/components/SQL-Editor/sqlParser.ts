@@ -7,10 +7,12 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     const tableMap: Record<string, string> = {};
     const columnMap: Record<string, Record<string, string>> = {}; // table -> row -> nodeId
     const enumTypes: any[] = [];
+    const enumNodeMap: Record<string, string> = {}; // enumName -> nodeId
     
     // First, extract ENUM types
     const enumRegex = /CREATE\s+TYPE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+AS\s+ENUM\s*\(\s*((?:'[^']*'(?:\s*,\s*'[^']*')*)\s*)\)/gi;
     let enumMatch;
+    let enumIndex = 0;
     
     while ((enumMatch = enumRegex.exec(sql)) !== null) {
       const enumName = enumMatch[1].replace(/^["'`]|["'`]$/g, '');
@@ -29,6 +31,19 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         values: values
       });
       
+      // Create an enum node for the visual flow
+      const nodeId = `enum-node-${Date.now()}-${enumIndex}`;
+      enumNodeMap[enumName.toLowerCase()] = nodeId;
+      
+      // Add the enum node to the newNodes array
+      newNodes.push({
+        id: nodeId,
+        type: 'enumType',
+        position: { x: 100 + enumIndex * 250, y: 100 },
+        data: { name: enumName, values: values }
+      });
+      
+      enumIndex++;
       console.log(`Parsed ENUM type: ${enumName} with values: ${values.join(', ')}`);
     }
     
@@ -91,11 +106,27 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           const constraintText = columnMatch[6] || '';
           const constraints: string[] = [];
           
-          // Check if the type is an ENUM
-          const isEnum = enumTypes.some(et => et.name.toLowerCase() === columnType.toLowerCase());
-          if (isEnum) {
-            // Make a special enum type identifier to handle in the visual editor
-            columnType = `enum_${columnType.toLowerCase()}`;
+          // Check if the type is an ENUM or references an enum
+          let isEnum = false;
+          let enumTypeName = '';
+          
+          // Check both for exact enum type name and for enum_prefix format
+          if (columnType.startsWith('enum_')) {
+            // Format: enum_typename
+            isEnum = true;
+            enumTypeName = columnType.substring(5); // Remove 'enum_' prefix
+          } else {
+            // Check if the type directly matches an enum name (case-insensitive)
+            const matchingEnum = enumTypes.find(et => 
+              et.name.toLowerCase() === columnType.toLowerCase()
+            );
+            
+            if (matchingEnum) {
+              isEnum = true;
+              enumTypeName = matchingEnum.name;
+              // Convert to standard format for consistency
+              columnType = `enum_${enumTypeName.toLowerCase()}`;
+            }
           }
           
           if (columnType.toUpperCase() === 'SERIAL') {
@@ -121,13 +152,19 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
             }
           }
           
-          // Check for inline foreign key reference
-          const inlineFkMatch = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
+          // Check for inline foreign key reference - IMPROVED to handle more cases
+          // This is the key change - improved foreign key detection in column definitions
+          let inlineFkMatch = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
+          if (!inlineFkMatch) {
+            // Try an alternative regex that can handle SQL like: INT REFERENCES users(id)
+            inlineFkMatch = /\b(?:INT|INTEGER|SERIAL|UUID|VARCHAR|TEXT)\b.*?REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(columnLine);
+          }
+          
           let foreignKey = null;
           
           if (inlineFkMatch) {
             const targetTable = inlineFkMatch[1].trim().replace(/^["'`]|["'`]$/g, '');
-            const targetColumn = inlineFkMatch[2].trim().replace(/^["'`]|["'`]$/g, '');
+            const targetColumn = inlineFkMatch[2] ? inlineFkMatch[2].trim().replace(/^["'`]|["'`]$/g, '') : 'id';
             
             foreignKey = {
               table: targetTable,
@@ -150,6 +187,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               targetTable: targetTable,
               targetColumn: targetColumn
             });
+            
+            console.log(`Added foreign key constraint: ${columnName} -> ${targetTable}(${targetColumn})`);
           }
           
           // Handle duplicate row names
@@ -169,12 +208,32 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           
           columns.push({
             title: columnName,
-            type: isEnum ? columnType : mapToBaseType(columnType),
+            type: columnType,  // Keep the enum_prefixed format
             constraints,
             id: columnId,
             default: defaultValue,
             foreignKey
           });
+          
+          // If this is an enum column, create an edge connection to the enum node
+          if (isEnum) {
+            const enumNodeId = enumNodeMap[enumTypeName.toLowerCase()];
+            if (enumNodeId) {
+              // Create edge from enum node to this column
+              newEdges.push({
+                id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                source: enumNodeId,
+                target: nodeId,  // The table node
+                sourceHandle: `enum-source-${enumTypeName}`,
+                targetHandle: `target-${columnName}`,
+                type: 'smoothstep',
+                animated: true,
+                label: 'enum type',
+                style: { stroke: '#a855f7' },  // Purple color for enum connections
+                data: { connectionType: 'enum' }
+              });
+            }
+          }
         }
       }
       
@@ -186,16 +245,20 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           data: { label: tableName, schema: columns }
         });
         
-        // Process inline foreign key constraints
+        // Process inline foreign key constraints - ENHANCED for better tracking
         for (const constraint of inlineConstraints) {
           const targetNodeId = tableMap[constraint.targetTable] || tableMap[constraint.targetTable.toLowerCase()];
           if (targetNodeId) {
-            newEdges.push(createEdge(
+            const edge = createEdge(
               nodeId,
               targetNodeId,
               constraint.sourceColumn,
               constraint.targetColumn
-            ));
+            );
+            newEdges.push(edge);
+            console.log(`Created inline FK edge: ${nodeId} -> ${targetNodeId} (${constraint.sourceColumn} -> ${constraint.targetColumn})`);
+          } else {
+            console.warn(`Missing target table mapping for FK: ${constraint.targetTable}`);
           }
         }
         
@@ -203,13 +266,13 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       }
     }
     
-    // Second pass: Extract ALTER TABLE foreign key constraints
-    // Updated regex to handle quoted table names with spaces
-    const alterTableRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+ADD\s+CONSTRAINT\s+\w+\s+FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
+    // Second pass: Extract ALTER TABLE foreign key constraints - FIXED REGEX PATTERN
+    console.log("Parsing ALTER TABLE statements with improved pattern...");
+    
+    // Improved regex that better handles quoted identifiers and whitespace
+    const alterTableRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+ADD\s+CONSTRAINT\s+(?:`|"|')?\w+(?:`|"|')?\s+FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
     let alterMatch;
-    
-    console.log("Parsing ALTER TABLE statements...");
-    
+
     while ((alterMatch = alterTableRegex.exec(sql)) !== null) {
       const sourceTable = alterMatch[1].replace(/^["'`]|["'`]$/g, '');
       const sourceColumn = alterMatch[2].replace(/^["'`]|["'`]$/g, '');
@@ -218,30 +281,52 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       
       console.log(`Found FK: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
       
+      // Debug log all available tables
+      console.log("Available tables:", Object.keys(tableMap).join(", "));
+      
       // Look up table IDs using original casing and normalized casing
       let sourceNodeId = tableMap[sourceTable] || tableMap[sourceTable.toLowerCase()];
       let targetNodeId = tableMap[targetTable] || tableMap[targetTable.toLowerCase()];
       
+      console.log(`Source node ID: ${sourceNodeId}, Target node ID: ${targetNodeId}`);
+      
       if (sourceNodeId && targetNodeId) {
         console.log(`Creating edge: ${sourceNodeId} -> ${targetNodeId}`);
-        const newEdge = createEdge(
-          sourceNodeId,
-          targetNodeId,
-          sourceColumn,
-          targetColumn
-        );
+        
+        // Create the edge with proper handle formatting
+        const newEdge = {
+          id: `sql-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          source: sourceNodeId,
+          target: targetNodeId,
+          sourceHandle: `source-${sourceColumn}`,
+          targetHandle: `target-${targetColumn}`,
+          type: 'smoothstep',
+          animated: true,
+          label: `${sourceColumn} → ${targetColumn}`,
+          data: { 
+            relationshipType: 'oneToMany',
+            sourceColumn,
+            targetColumn
+          }
+        };
+        
         newEdges.push(newEdge);
         console.log(`Edge created: ${newEdge.id}`);
       } else {
         console.warn(`Could not map tables to nodes: ${sourceTable} -> ${targetTable}`);
-        console.warn(`Available table mappings: ${Object.keys(tableMap).join(", ")}`);
       }
     }
     
-    // Special debug for troubleshooting
+    // Comprehensive debug to ensure ALTER statements are processed
     if (newEdges.length === 0 && sql.toUpperCase().includes("ALTER TABLE")) {
       console.warn("No edges were created, but ALTER TABLE statements exist");
-      console.warn("SQL contains:", sql);
+      
+      // Extract just the ALTER statements for debugging
+      const alterStatements = sql.match(/ALTER\s+TABLE\s+.*?;/gi) || [];
+      console.warn(`Found ${alterStatements.length} ALTER statements:`, alterStatements);
+      
+      // Check table mappings
+      console.warn("Table mappings:", tableMap);
     }
     
     if (!foundTables && sql.toUpperCase().includes('CREATE TABLE')) {
@@ -250,6 +335,11 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       throw new Error("No valid tables found in the SQL. Please check your syntax.");
     }
     
+    // Before returning, log the complete list of edges for debugging
+    console.log(`Created ${newEdges.length} edges:`, newEdges.map(e => 
+      `${e.source}(${e.sourceHandle}) -> ${e.target}(${e.targetHandle})`
+    ));
+    
     return { nodes: newNodes, edges: newEdges, enumTypes };
   } catch (error: any) {
     console.error('Error parsing SQL:', error);
@@ -257,16 +347,24 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
   }
 };
 
+// Replace createEdge with a more robust implementation
 function createEdge(sourceNodeId: string, targetNodeId: string, sourceColumn: string, targetColumn: string) {
+  // Ensure we're creating a valid edge
+  console.log(`Creating edge: ${sourceNodeId}:${sourceColumn} -> ${targetNodeId}:${targetColumn}`);
+  
   return {
     id: `sql-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     source: sourceNodeId,
-    target: targetNodeId,
+    target: targetNodeId, 
     sourceHandle: `source-${sourceColumn}`,
     targetHandle: `target-${targetColumn}`,
     type: 'smoothstep',
     animated: true,
-    label: 'references',
-    data: { relationshipType: 'oneToMany' }
+    label: `${sourceColumn} → ${targetColumn}`,
+    data: { 
+      relationshipType: 'oneToMany',
+      sourceColumn,
+      targetColumn
+    }
   };
 }

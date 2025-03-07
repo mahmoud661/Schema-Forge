@@ -1,10 +1,9 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Connection, Edge, Node, useReactFlow } from "@xyflow/react";
 import { useSchemaStore } from "@/hooks/use-schema";
-import { templates } from "@/lib/schema-templates";
-import { SchemaNode, EnumTypeNode } from "../types";
 import { toast } from "sonner";
+import { debounce } from "lodash"; // You'll need to install lodash if not already
 
 interface DuplicateColumnInfo {
   [columnName: string]: {
@@ -24,63 +23,73 @@ export function useSchemaFlow() {
     onNodesChange, 
     onEdgesChange,
     setSelectedEdge,
-    setSelectedNode,  // Add this line to extract setSelectedNode
-    updateActiveTab,
-    setDuplicateColumns
+    setSelectedNode,
+    onConnect: storeOnConnect,
+    setDuplicateColumns,
   } = useSchemaStore();
   const { nodes, edges, selectedEdge, activeTab, duplicateColumns } = schema;
   
   const reactFlowInstance = useReactFlow();
+  // Use a reference to avoid recreating functions
+  const stableNodeIds = useRef(new Set());
 
+  // Initial setup - only reset for truly new schemas
   useEffect(() => {
     const schemaId = params.id as string;
-    if (schemaId === "new") {
+    if (schemaId === "new" && nodes.length === 0) {
       updateNodes([]);
       updateEdges([]);
-      // Clear any existing enum types when creating a new schema
       updateSchemaState({ enumTypes: [] });
-      return;
     }
+  }, [params.id]);
 
-    // This should now load from your schema store or API instead of a separate schemas store
-    // You'll need to adapt this part based on how your application loads schemas
-  }, [params.id, updateNodes, updateEdges, updateSchemaState]);
+  // Performance optimization: Debounce duplicate column detection
+  const debouncedDuplicateCheck = useCallback(
+    debounce((nodes) => {
+      const columnMap: Record<string, string[]> = {};
+      const newDuplicateColumns: Record<string, any> = {};
 
-  // Check for duplicate row names across all tables
+      // Only check database schema nodes
+      nodes.forEach((node) => {
+        if (node.data?.schema && Array.isArray(node.data.schema)) {
+          node.data.schema.forEach((row) => {
+            if (!columnMap[row.title]) {
+              columnMap[row.title] = [];
+            }
+            columnMap[row.title].push(node.data.label);
+          });
+        }
+      });
+
+      Object.entries(columnMap).forEach(([columnName, tables]) => {
+        if (tables.length > 1) {
+          tables.forEach((tableName) => {
+            if (!newDuplicateColumns[tableName]) {
+              newDuplicateColumns[tableName] = {};
+            }
+            newDuplicateColumns[tableName][columnName] = {
+              isDuplicate: true,
+              tables: tables.filter(t => t !== tableName)
+            };
+          });
+        }
+      });
+
+      setDuplicateColumns(newDuplicateColumns);
+    }, 300), // 300ms debounce
+    [setDuplicateColumns]
+  );
+
+  // Check for duplicate row names across all tables - now using debounced function
   useEffect(() => {
-    const columnMap: Record<string, string[]> = {};
-    const newDuplicateColumns: Record<string, DuplicateColumnInfo> = {};
-
-    // Build a map of row names to table names - only for database schema nodes
-    nodes.forEach((node) => {
-      // Check if this is a database schema node - enum nodes don't have 'schema' property
-      if (node.data && node.data.schema && Array.isArray(node.data.schema)) {
-        node.data.schema.forEach((row) => {
-          if (!columnMap[row.title]) {
-            columnMap[row.title] = [];
-          }
-          columnMap[row.title].push(node.data.label);
-        });
-      }
-    });
-
-    // Find duplicates and build the duplicate info structure
-    Object.entries(columnMap).forEach(([columnName, tables]) => {
-      if (tables.length > 1) {
-        tables.forEach((tableName) => {
-          if (!newDuplicateColumns[tableName]) {
-            newDuplicateColumns[tableName] = {};
-          }
-          newDuplicateColumns[tableName][columnName] = {
-            isDuplicate: true,
-            tables: tables.filter(t => t !== tableName)
-          };
-        });
-      }
-    });
-
-    setDuplicateColumns(newDuplicateColumns);
-  }, [nodes, setDuplicateColumns]);
+    // Don't run on every small node change
+    if (nodes.length > 0) {
+      debouncedDuplicateCheck(nodes);
+    }
+    return () => {
+      debouncedDuplicateCheck.cancel();
+    };
+  }, [nodes, debouncedDuplicateCheck]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => {
@@ -241,22 +250,23 @@ export function useSchemaFlow() {
         return;
       }
 
-      // This should update your schema in the database or wherever you store it
-      // You'll need to adapt this based on your application's save mechanism
       toast.success("Schema saved successfully");
       router.refresh();
     } catch (error) {
       console.error('Failed to save schema:', error);
       toast.error("Failed to save schema");
     }
-  }, [params.id, nodes, edges, router]);
+  }, [params.id, router]);
 
   const onNodeDelete = useCallback((nodesToDelete: Node[]): void => {
+    // Update stable reference of node IDs
+    stableNodeIds.current = new Set(nodes.map(n => n.id));
+    
     // For each deleted node, we need to perform clean-up
     for (const nodeToDelete of nodesToDelete) {
       // If an enum node is deleted, clean up the enum type
       if (nodeToDelete.type === 'enumType') {
-        const enumNode = nodeToDelete as EnumTypeNode;
+        const enumNode = nodeToDelete as any;
         const enumName = enumNode.data?.name;
         
         if (enumName) {
@@ -293,7 +303,7 @@ export function useSchemaFlow() {
     // Filter nodes to remove deleted ones
     const validNodesToDelete = nodesToDelete.filter(node => {
       if (node.type === 'enumType') {
-        const enumNode = node as EnumTypeNode;
+        const enumNode = node as any;
         const enumName = enumNode.data?.name;
         
         // Check if this enum is used by any tables
@@ -418,8 +428,6 @@ export function useSchemaFlow() {
   }, [edges, updateEdges]);
 
   return {
-    nodes,
-    edges,
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -430,8 +438,6 @@ export function useSchemaFlow() {
     selectedEdge,
     setSelectedEdge,
     updateEdgeData,
-    activeTab,
-    setActiveTab: updateActiveTab,
     duplicateColumns,
     updateEnumTypeNameInColumns,
     updateEnumEdges,

@@ -16,7 +16,13 @@ export interface ColumnSchema {
 
 export interface SchemaNodeData {
   label: string;
+  id: string;
   schema: ColumnSchema[];
+  color?: {
+    light: string;
+    dark: string;
+    border: string;
+  };
 }
 
 export interface EnumNodeData {

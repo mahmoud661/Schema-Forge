@@ -54,30 +54,21 @@ export function SqlEditor() {
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
   const { widths, updateWidth } = useSidebarStore();
   
-  // On mount, initialize settings if they don't exist
+  // On mount, initialize settings if they don't exist and generate SQL once
   useEffect(() => {
     if (!schema.settings) {
       updateSettings(defaultSettings);
     }
+    
+    // Generate SQL once on component mount or when switching to this tab
+    if (!appliedSql || appliedSql === "") {
+      const initialSql = generateSql(dbType, nodes, edges, enumTypes, settings);
+      setAppliedSql(initialSql);
+      setSqlContent(initialSql);
+      setEditableSql(initialSql);
+    }
   }, [schema.settings, updateSettings]);
   
-  // On mount, generate initial SQL once and store it
-  useEffect(() => {
-    const initialSql = generateSql(dbType, nodes, edges, enumTypes, settings);
-    setAppliedSql(initialSql);
-    setSqlContent(initialSql);
-    setEditableSql(initialSql);
-  }, [dbType, enumTypes, settings]); // Run when dependencies change
-  
-  // Regenerate SQL when database type changes or settings change
-  useEffect(() => {
-    if (!isEditing) {
-      const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
-      setSqlContent(newSql);
-      setAppliedSql(newSql);
-    }
-  }, [dbType, nodes, edges, enumTypes, settings, isEditing]);
-
   // Effect for live updates when SQL changes
   useEffect(() => {
     if (isEditing && liveEditMode && editableSql) {
@@ -162,7 +153,6 @@ export function SqlEditor() {
           const warnings = validation.errors.filter(err => err.startsWith('Warning:'));
           if (warnings.length > 0) {
             console.warn("SQL warnings:", warnings);
-            // Don't show toast for warnings anymore, they're usually false positives
           }
         }
       }
@@ -171,18 +161,21 @@ export function SqlEditor() {
         const parsedSchema = parseSqlToSchema(processedSql);
         if (parsedSchema) {
           console.log("Parsed schema:", { 
-            tables: parsedSchema.nodes.map(n => n.data.label),
+            tables: parsedSchema.nodes.filter(n => n.type !== 'enumType').map(n => n.data.label),
+            enums: parsedSchema.nodes.filter(n => n.type === 'enumType').map(n => n.data.name),
             edges: parsedSchema.edges.length,
             enumTypes: parsedSchema.enumTypes?.length || 0,
             edgeDetails: parsedSchema.edges.map(e => ({
               source: e.source,
               target: e.target,
               sourceHandle: e.sourceHandle,
-              targetHandle: e.targetHandle
+              targetHandle: e.targetHandle,
+              connectionType: e.data?.connectionType
             })),
             sql: processedSql 
           });
           
+          // Make sure we update BOTH the nodes AND enumTypes in our schema
           handleUpdateSchema(
             parsedSchema.nodes, 
             parsedSchema.edges, 
@@ -197,7 +190,13 @@ export function SqlEditor() {
             setAppliedSql(processedSql);
             setSqlContent(processedSql);
             setIsEditing(false);
-            toast.success(`Schema updated successfully (${parsedSchema.nodes.length} tables, ${parsedSchema.edges.length} relationships, ${parsedSchema.enumTypes?.length || 0} enum types)`);
+            
+            const enumCount = parsedSchema.nodes.filter(n => n.type === 'enumType').length;
+            const tableCount = parsedSchema.nodes.filter(n => n.type === 'databaseSchema' || !n.type).length;
+            
+            toast.success(
+              `Schema updated successfully (${tableCount} tables, ${parsedSchema.edges.length} relationships, ${enumCount} enum types)`
+            );
           }
         }
       } catch (parseError: any) {
@@ -349,25 +348,28 @@ export function SqlEditor() {
       maxWidth={800}
       headerActions={headerActions}
       headerClassName="p-4 flex-col gap-3 sm:flex-row"
+      collapsible={true}
     >
-      {error && (
-        <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive overflow-scroll">
-          <p className="mb-2 font-medium">{error}</p>
-          <details className="text-xs opacity-80">
-            <summary>Show troubleshooting info</summary>
-            <p className="mt-2">If your foreign keys are not showing up, make sure the table names and row names match exactly (including case).</p>
-            <p className="mt-1">The ALTER TABLE statement should look like: ALTER TABLE "Table1" ADD CONSTRAINT name FOREIGN KEY ("row") REFERENCES "Table2"("row");</p>
-          </details>
+      <div className="flex flex-col h-full overflow-hidden">
+        {error && (
+          <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive overflow-auto">
+            <p className="mb-2 font-medium">{error}</p>
+            <details className="text-xs opacity-80">
+              <summary>Show troubleshooting info</summary>
+              <p className="mt-2">If your foreign keys are not showing up, make sure the table names and row names match exactly (including case).</p>
+              <p className="mt-1">The ALTER TABLE statement should look like: ALTER TABLE "Table1" ADD CONSTRAINT name FOREIGN KEY ("row") REFERENCES "Table2"("row");</p>
+            </details>
+          </div>
+        )}
+        
+        <div className="flex-1 h-full bg-muted/30 overflow-hidden">
+          <EditorComponent 
+            isEditing={isEditing}
+            editableSql={editableSql}
+            sqlContent={sqlContent}
+            setEditableSql={setEditableSql}
+          />
         </div>
-      )}
-      
-      <div className="flex-1 h-full bg-muted/30">
-        <EditorComponent 
-          isEditing={isEditing}
-          editableSql={editableSql}
-          sqlContent={sqlContent}
-          setEditableSql={setEditableSql}
-        />
       </div>
     </BaseSidebar>
   );

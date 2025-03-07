@@ -1,5 +1,5 @@
-import React from "react";
-import { ReactFlow } from "@xyflow/react";
+import React, { useCallback } from "react";
+import { ReactFlow, ReactFlowProvider, useReactFlow, ViewportHelperFunctions } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@/lib/schema-flow-styles.css";
 import { Toaster } from "sonner";
@@ -14,6 +14,7 @@ import { SqlEditor } from "./sql-editor";
 import { AiAssistant } from "./ai-assistant";
 import { useSchemaFlow } from "../hooks/use-schema-flow";
 import { useSchemaNodes } from "../hooks/use-schema-nodes";
+import { useSchemaStore } from "@/hooks/use-schema";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
@@ -21,11 +22,11 @@ const nodeTypes = {
 };
 
 export function SchemaFlow() {
+  // Use the centralized schema store
+  const { schema, updateActiveTab } = useSchemaStore();
+  const { nodes, edges, activeTab } = schema;
+  
   const {
-    nodes,
-    edges,
-    setNodes,
-    setEdges,
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -36,8 +37,6 @@ export function SchemaFlow() {
     selectedEdge,
     setSelectedEdge,
     updateEdgeData,
-    activeTab,
-    setActiveTab,
     duplicateColumns,
   } = useSchemaFlow();
 
@@ -51,10 +50,14 @@ export function SchemaFlow() {
     deleteNode
   } = useSchemaNodes();
 
-  const handleUpdateSchema = (newNodes, newEdges) => {
-    setNodes(newNodes);
-    setEdges(newEdges);
-  };
+  // Performance enhancement: Optimize panning and viewport for large diagrams
+  const onInit = useCallback((reactFlowInstance: ViewportHelperFunctions) => {
+    reactFlowInstance.fitView({
+      padding: 0.2,
+      maxZoom: 1.5,
+      minZoom: 0.5,
+    });
+  }, []);
 
   // Render the appropriate sidebar content based on the active tab
   const renderSidebar = () => {
@@ -65,52 +68,40 @@ export function SchemaFlow() {
             selectedNode={selectedNode}
             onUpdateNode={(nodeData) => {
               if (selectedNode) {
-                updateNodeData(selectedNode, nodeData, setNodes);
+                updateNodeData(selectedNode, nodeData);
               }
             }}
             onDeleteNode={(node) => {
               deleteNode(node);
             }}
             duplicateColumns={duplicateColumns[selectedNode?.data?.label]}
-            nodes={nodes}
+            nodes={selectedNode ? nodes : []} // Performance: Only pass all nodes when needed
             onNodeSelect={(node) => onNodeClick({} as React.MouseEvent, node)}
           />
         );
       case "sql":
-        return (
-          <SqlEditor 
-            nodes={nodes} 
-            edges={edges} 
-            onUpdateSchema={handleUpdateSchema}
-          />
-        );
+        return <SqlEditor />;
       case "ai":
-        return (
-          <AiAssistant 
-            nodes={nodes} 
-            edges={edges} 
-            onApplySuggestion={handleUpdateSchema} 
-          />
-        );
+        return <AiAssistant />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="h-screen w-full flex flex-col">
+    <div className="h-screen w-full flex flex-col overflow-hidden">
       <Toaster position="top-right" />
       
       <EditorHeader 
         onSave={onSave}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={updateActiveTab}
       />
       
-      <div ref={reactFlowWrapper} className="flex-1 flex">
+      <div ref={reactFlowWrapper} className="flex-1 flex overflow-hidden">
         {renderSidebar()}
         
-        <div className="flex-1 relative" style={{ height: '100%', width: '100%' }}>
+        <div className="flex-1 h-full">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -121,6 +112,7 @@ export function SchemaFlow() {
             onNodesDelete={onNodeDelete}
             onEdgeClick={onEdgeClick}
             nodeTypes={nodeTypes}
+            onInit={onInit}
             fitView
             onDragOver={onDragOver}
             onDrop={onDrop}
@@ -134,10 +126,16 @@ export function SchemaFlow() {
               type: 'smoothstep',
               animated: true,
             }}
+            // Performance settings
             nodesDraggable={true}
             nodesConnectable={true}
             elementsSelectable={true}
-            connectOnClick={true}
+            minZoom={0.1}
+            maxZoom={2.5}
+            nodeExtent={[
+              [-2000, -2000],
+              [4000, 4000]
+            ]}
           >
             <FlowControls />
           </ReactFlow>

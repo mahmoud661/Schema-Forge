@@ -4,8 +4,24 @@ import { SchemaNode, EnumTypeNode } from "../types";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { toast } from "sonner";
 
+// Color palette for table headers - moved here for central assignment
+const TABLE_COLORS = [
+  { light: '#e0f2fe', dark: '#0c4a6e', border: '#38bdf8' }, // blue
+  { light: '#dcfce7', dark: '#14532d', border: '#34d399' }, // green
+  { light: '#fef3c7', dark: '#78350f', border: '#fbbf24' }, // yellow
+  { light: '#fce7f3', dark: '#831843', border: '#ec4899' }, // pink
+  { light: '#f3e8ff', dark: '#581c87', border: '#c084fc' }, // purple
+  { light: '#ffedd5', dark: '#7c2d12', border: '#fb923c' }, // orange
+  { light: '#f1f5f9', dark: '#334155', border: '#94a3b8' }, // slate
+];
+
 function generateId() {
   return Date.now().toString();
+}
+
+// Assign a stable color based on index
+function assignTableColor(index: number) {
+  return TABLE_COLORS[index % TABLE_COLORS.length];
 }
 
 export function useSchemaNodes() {
@@ -20,6 +36,9 @@ export function useSchemaNodes() {
   } = useSchemaStore();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNode } = useReactFlow();
+  
+  // Keep track of how many tables we've created to assign consistent colors
+  const tableCountRef = useRef<number>(schema.nodes.filter(n => n.type === 'databaseSchema' || !n.type).length);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: SchemaNode | EnumTypeNode) => {
     setSelectedNode(node as SchemaNode);
@@ -47,13 +66,22 @@ export function useSchemaNodes() {
       if (type === 'table') {
         const baseLabel = "New Table";
         const label = getUniqueLabel(baseLabel, schema.nodes);
+        
+        // Generate a unique ID
+        const nodeId = `table-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        
+        // Assign a color based on the table count
+        const color = assignTableColor(tableCountRef.current);
+        tableCountRef.current += 1;
   
         const newNode = {
-          id: generateId(),
+          id: nodeId,
           type: 'databaseSchema',
           position,
           data: {
             label,
+            id: nodeId,
+            color, // Store color in node data
             schema: [
               { 
                 title: "id", 
@@ -203,3 +231,6 @@ export function useSchemaNodes() {
     deleteNode
   };
 }
+
+// Export the color palette for use in other components
+export { TABLE_COLORS };

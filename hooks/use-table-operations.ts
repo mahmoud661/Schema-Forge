@@ -1,12 +1,15 @@
 import { toast } from "sonner";
 import { SchemaNode } from "@/app/schemas/editor/[id]/types";
 import { useEnumConnections } from "./use-enum-connections";
+import { useSchemaStore } from "@/hooks/use-schema";
+import { useCallback } from "react";
 
 export const useTableOperations = (
   selectedNode: SchemaNode | null,
   onUpdateNode: (data: Partial<any>) => void
 ) => {
   const { disconnectEnumFromColumn } = useEnumConnections();
+  const { schema, updateEdges } = useSchemaStore();
   
   const addColumn = () => {
     if (!selectedNode) return;
@@ -34,7 +37,7 @@ export const useTableOperations = (
       }
     }
     
-    // Handle type changes from enum to non-enum
+    // Handle type changes from/to enum
     if (field === 'type') {
       const oldType = newSchema[index].type;
       const oldIsEnum = oldType.startsWith('enum_');
@@ -44,6 +47,40 @@ export const useTableOperations = (
       if (oldIsEnum && (!newIsEnum || oldType !== value)) {
         // We need to disconnect the old enum connection
         disconnectEnumFromColumn(selectedNode.id, newSchema[index].title);
+      }
+      
+      // If changing to an enum type, create a connection
+      if (newIsEnum && (!oldIsEnum || oldType !== value)) {
+        // Extract enum name from the type (format: enum_typename)
+        const enumName = value.substring(5); // Remove 'enum_' prefix
+        
+        // Find the enum node with this name
+        const enumNode = schema.nodes.find(node => 
+          node.type === 'enumType' && 
+          node.data?.name?.toLowerCase() === enumName.toLowerCase()
+        );
+        
+        if (enumNode) {
+          // Create an edge connection from enum to this column
+          const newEdge = {
+            id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            source: enumNode.id,
+            target: selectedNode.id,
+            sourceHandle: `enum-source-${enumNode.data.name}`,
+            targetHandle: `target-${newSchema[index].title}`,
+            type: 'smoothstep',
+            animated: true,
+            label: 'enum type',
+            style: { stroke: '#a855f7' }, // Purple color for enum connections
+            data: { connectionType: 'enum' }
+          };
+          
+          // Update edges in the store
+          updateEdges([...schema.edges, newEdge]);
+          
+          // Show success toast
+          toast.success(`Connected column to ENUM type "${enumName}"`);
+        }
       }
     }
     

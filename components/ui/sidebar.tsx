@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { GripVertical, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { GripVertical, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface BaseSidebarProps {
   title: string;
@@ -20,6 +21,7 @@ interface BaseSidebarProps {
   children: React.ReactNode;
   headerActions?: React.ReactNode;
   bordered?: boolean;
+  collapsible?: boolean;
 }
 
 export function BaseSidebar({
@@ -37,39 +39,87 @@ export function BaseSidebar({
   children,
   headerActions,
   bordered = true,
+  collapsible = true,
 }: BaseSidebarProps) {
   // Use external width if provided, otherwise use internal state
   const [internalWidth, setInternalWidth] = useState(defaultWidth);
   const sidebarWidth = width !== undefined ? width : internalWidth;
   const [isDragging, setIsDragging] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  // Use refs for better performance during dragging
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null); // Add ref for the toggle button
+  const dragStartX = useRef<number>(0);
+  const startWidth = useRef<number>(sidebarWidth);
   
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
+    dragStartX.current = e.clientX;
+    startWidth.current = sidebarWidth;
+    
+    // Add classes to improve UX during dragging
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    
+    // Remove transition from button during dragging for instant updates
+    if (buttonRef.current) {
+      buttonRef.current.style.transition = 'none';
+    }
   };
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
       
-      const newWidth = e.clientX;
-      if (newWidth >= minWidth && newWidth <= maxWidth) {
-        // Update internal state
+      // Calculate new width directly without state updates for better performance
+      const deltaX = e.clientX - dragStartX.current;
+      const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
+      
+      // Apply width directly to the DOM for immediate feedback
+      if (sidebarRef.current) {
+        sidebarRef.current.style.width = `${newWidth}px`;
+      }
+      
+      // Also update button position immediately
+      if (buttonRef.current && !isCollapsed) {
+        buttonRef.current.style.left = `${newWidth - 12}px`;
+      }
+      
+      // We'll still update state but less frequently
+      // This is a simple way to throttle
+      requestAnimationFrame(() => {
         setInternalWidth(newWidth);
-        
-        // Notify parent if callback provided
         if (onWidthChange) {
           onWidthChange(newWidth);
         }
-      }
+      });
     };
     
     const handleMouseUp = () => {
+      if (!isDragging) return;
+      
       setIsDragging(false);
+      
+      // Clean up styles
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      
+      // Restore transition on button
+      if (buttonRef.current) {
+        buttonRef.current.style.transition = '';
+      }
+      
+      // Final width update
+      const finalWidth = parseInt(sidebarRef.current?.style.width || `${sidebarWidth}`, 10);
+      if (onWidthChange) {
+        onWidthChange(finalWidth);
+      }
     };
     
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mousemove', handleMouseMove, { passive: true });
       document.addEventListener('mouseup', handleMouseUp);
     }
     
@@ -77,49 +127,99 @@ export function BaseSidebar({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, minWidth, maxWidth, onWidthChange]);
+  }, [isDragging, minWidth, maxWidth, onWidthChange, sidebarWidth, isCollapsed]);
+  
+  const toggleCollapse = () => {
+    setIsCollapsed(!isCollapsed);
+  };
 
   return (
-    // Add max-h-screen and overflow-y-auto to make the sidebar scrollable
-    <div className="flex relative max-h-screen overflow-y-auto" style={{ width: `${sidebarWidth}px` }}>
-      <div className={cn(
-        "flex-1 bg-background flex flex-col h-full overflow-auto",
-        bordered && "border-r",
-        className
-      )}>
-        {title && (
-          <div className={cn(
-            "p-4 border-b flex justify-between items-center",
-            headerClassName
-          )}>
-            <h3 className="font-semibold">{title}</h3>
-            <div className="flex items-center gap-2">
-              {headerActions}
-              {showClose && onClose && (
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="h-4 w-4" />
-                </Button>
+    <div className="flex h-full relative">
+      <AnimatePresence initial={false}>
+        {!isCollapsed ? (
+          <div 
+            ref={sidebarRef}
+            className={cn(
+              "h-full flex flex-col relative transition-opacity",
+              isDragging ? "transition-none" : "" // Remove transitions during drag for better performance
+            )}
+            style={{ 
+              width: `${sidebarWidth}px`,
+              opacity: 1 
+            }}
+          >
+            <div className={cn(
+              "flex-1 bg-background flex flex-col h-full overflow-hidden",
+              bordered && "border-r",
+              className
+            )}>
+              {title && (
+                <div className={cn(
+                  "p-4 border-b flex justify-between items-center",
+                  headerClassName
+                )}>
+                  <h3 className="font-semibold">{title}</h3>
+                  <div className="flex items-center gap-2">
+                    {headerActions}
+                    {showClose && onClose && (
+                      <Button variant="ghost" size="icon" onClick={onClose}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
+              
+              <div className={cn(
+                "flex-1 overflow-auto",
+                contentClassName
+              )}>
+                {children}
+              </div>
+            </div>
+            
+            {/* Resize handle - wider hit area for better UX */}
+            <div 
+              className={cn(
+                "w-2 hover:bg-primary/30 active:bg-primary/50 transition-colors absolute right-0 top-0 bottom-0 cursor-col-resize",
+                isDragging && "bg-primary/50" // Visual feedback during dragging
+              )}
+              onMouseDown={handleMouseDown}
+            >
+              <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-70">
+                <GripVertical className="h-5 w-5" />
+              </div>
             </div>
           </div>
+        ) : (
+          // When collapsed, render nothing but keep the space for the button
+          <div className="w-0" />
         )}
-        
-        <div className={cn(
-          "flex-1 overflow-auto",
-          contentClassName
-        )}>
-          {children}
-        </div>
-      </div>
+      </AnimatePresence>
       
-      {/* Resize handle */}
+      {/* Collapse/Expand Button - Now with no transition during dragging */}
       <div 
-        className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors"
-        onMouseDown={handleMouseDown}
+        ref={buttonRef}
+        className={cn(
+          "absolute top-1/2 -translate-y-1/2 transform z-10",
+          !isDragging && "transition-all duration-200" // Only apply transition when not dragging
+        )}
+        style={{
+          left: isCollapsed ? '2px' : `${sidebarWidth - 12}px`
+        }}
       >
-        <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-50">
-          <GripVertical className="h-5 w-5" />
-        </div>
+        <Button 
+          variant="secondary"
+          size="icon"
+          className="h-6 w-6 rounded-full shadow-md"
+          onClick={toggleCollapse}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
+        </Button>
       </div>
     </div>
   );
