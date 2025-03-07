@@ -66,7 +66,8 @@ export const generateEnumTypes = (enumTypes: any[], useCaseSensitive: boolean = 
 export const generatePostgresTable = (node: any, useCaseSensitive: boolean = false, useInlineConstraints: boolean = true) => {
   const tableName = getQuotedTableName(node.data.label, useCaseSensitive);
   let sql = `CREATE TABLE IF NOT EXISTS ${tableName} (\n`;
-  const foreignKeys: string[] = [];
+  const foreignKeys: any[] = [];
+  const tableConstraints: string[] = [];
   
   node.data.schema.forEach((row: any, index: number) => {
     const rowName = getQuotedColumnName(row.title, useCaseSensitive);
@@ -77,11 +78,25 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
       sql += ` DEFAULT ${row.default}`;
     }
     
-    // Add constraints inline
+    // Handle constraints that don't conflict with foreign keys
     if (row.constraints) {
-      if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
+      // Add NOT NULL constraint inline
       if (row.constraints.includes('notnull')) sql += ' NOT NULL';
-      if (row.constraints.includes('unique')) sql += ' UNIQUE';
+      
+      // Add UNIQUE constraint inline if it's not also a foreign key
+      if (row.constraints.includes('unique') && (!row.foreignKey || !useInlineConstraints)) 
+        sql += ' UNIQUE';
+      
+      // For PRIMARY KEY, handle differently if it's also a foreign key
+      const isPrimaryKey = row.constraints.includes('primary');
+      const hasForeignKey = row.foreignKey && useInlineConstraints;
+
+      // If this is both a primary key and a foreign key, define PRIMARY KEY as table constraint
+      if (isPrimaryKey && hasForeignKey) {
+        tableConstraints.push(`  PRIMARY KEY (${rowName})`);
+      } else if (isPrimaryKey) {
+        sql += ' PRIMARY KEY';
+      }
     }
     
     // Handle foreign keys (only if using inline constraints)
@@ -109,8 +124,18 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
       });
     }
     
-    sql += index < node.data.schema.length - 1 ? ',\n' : '\n';
+    // Only add comma if this isn't the last row or if we have table constraints
+    if (index < node.data.schema.length - 1 || tableConstraints.length > 0) {
+      sql += ',\n';
+    } else {
+      sql += '\n';
+    }
   });
+  
+  // Add any table-level constraints
+  if (tableConstraints.length > 0) {
+    sql += tableConstraints.join(',\n') + '\n';
+  }
   
   sql += ');';
   
@@ -125,6 +150,32 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
       sql += `\nCREATE INDEX idx_${safeTableName}_${safeColName} ON ${tableName} (${getQuotedColumnName(row.title, useCaseSensitive)});`;
     }
   });
+  
+  // Add ALTER TABLE statements for foreign keys if not using inline constraints
+  if (!useInlineConstraints && foreignKeys.length > 0) {
+    sql += '\n\n-- Foreign Key Constraints';
+    foreignKeys.forEach((fk) => {
+      const constraintName = useCaseSensitive ? 
+        `"fk_${node.data.label.replace(/\s/g, '_')}_${fk.row.replace(/"/g, '').replace(/\s/g, '_')}"`
+        : `fk_${node.data.label.toLowerCase().replace(/\s/g, '_')}_${fk.row.replace(/"/g, '').toLowerCase().replace(/\s/g, '_')}`;
+      
+      const refTable = useCaseSensitive ? 
+        `"${fk.refTable.replace(/"/g, '""')}"` : fk.refTable;
+      const refColumn = useCaseSensitive ? 
+        `"${fk.refColumn.replace(/"/g, '""')}"` : fk.refColumn;
+      
+      sql += `\nALTER TABLE ${tableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${fk.row}) REFERENCES ${refTable}(${refColumn})`;
+      
+      if (fk.onDelete) {
+        sql += ` ON DELETE ${fk.onDelete}`;
+      }
+      if (fk.onUpdate) {
+        sql += ` ON UPDATE ${fk.onUpdate}`;
+      }
+      
+      sql += `;`;
+    });
+  }
   
   return sql;
 };
@@ -200,33 +251,98 @@ export const generateSql = (
     sql += generateEnumTypes(enumTypes, settings.caseSensitiveIdentifiers);
   }
   
+  // Process edges to collect information about foreign keys for inline format
+  const inlineForeignKeys: Record<string, Record<string, any>> = {};
+  
+  if (settings.useInlineConstraints) {
+    schemaEdges.forEach(edge => {
+      // Skip enum edges
+      if (edge.data?.connectionType === 'enum') return;
+      
+      const sourceNode = schemaNodes.find(n => n.id === edge.source);
+      const targetNode = schemaNodes.find(n => n.id === edge.target);
+      
+      if (!sourceNode || !targetNode) return;
+      
+      // Extract column names
+      const sourceHandle = edge.sourceHandle || '';
+      const targetHandle = edge.targetHandle || '';
+      const sourceColumn = sourceHandle.startsWith('source-') 
+        ? sourceHandle.substring('source-'.length) 
+        : (edge.data?.sourceColumn || 'id');
+      const targetColumn = targetHandle.startsWith('target-') 
+        ? targetHandle.substring('target-'.length) 
+        : (edge.data?.targetColumn || 'id');
+        
+      // Create the foreign key info for this table-column
+      if (!inlineForeignKeys[sourceNode.id]) {
+        inlineForeignKeys[sourceNode.id] = {};
+      }
+      
+      inlineForeignKeys[sourceNode.id][sourceColumn] = {
+        table: targetNode.data.label,
+        row: targetColumn,
+        onDelete: edge.data?.onDelete,
+        onUpdate: edge.data?.onUpdate
+      };
+    });
+  }
+  
   // Then, generate all table creation statements
   schemaNodes.forEach(node => {
     // Only process database schema nodes, not enum nodes
     if (node.type === "databaseSchema" || !node.type) {
-      if (type === "postgresql") {
-        sql += generatePostgresTable(node, settings.caseSensitiveIdentifiers, settings.useInlineConstraints);
-      } else if (type === "mysql") {
-        sql += generateMySqlTable(node, settings.caseSensitiveIdentifiers);
-      } else if (type === "sqlite") {
-        sql += generateSqliteTable(node, settings.caseSensitiveIdentifiers);
+      // If using inline constraints, add the foreign keys to the node data
+      if (settings.useInlineConstraints && inlineForeignKeys[node.id]) {
+        const nodeWithFKs = { ...node };
+        
+        nodeWithFKs.data = { ...nodeWithFKs.data };
+        nodeWithFKs.data.schema = [...nodeWithFKs.data.schema].map(row => {
+          if (inlineForeignKeys[node.id][row.title]) {
+            return { 
+              ...row, 
+              foreignKey: inlineForeignKeys[node.id][row.title]
+            };
+          }
+          return row;
+        });
+        
+        // Generate SQL with the enhanced node data
+        if (type === "postgresql") {
+          sql += generatePostgresTable(nodeWithFKs, settings.caseSensitiveIdentifiers, true);
+        } else if (type === "mysql") {
+          sql += generateMySqlTable(nodeWithFKs, settings.caseSensitiveIdentifiers);
+        } else if (type === "sqlite") {
+          sql += generateSqliteTable(nodeWithFKs, settings.caseSensitiveIdentifiers);
+        }
+      } else {
+        // Standard mode without inline FKs
+        if (type === "postgresql") {
+          sql += generatePostgresTable(node, settings.caseSensitiveIdentifiers, false);
+        } else if (type === "mysql") {
+          sql += generateMySqlTable(node, settings.caseSensitiveIdentifiers);
+        } else if (type === "sqlite") {
+          sql += generateSqliteTable(node, settings.caseSensitiveIdentifiers);
+        }
       }
+      
       sql += "\n\n";
     }
   });
   
-  // Only add ALTER TABLE statements if not using inline constraints OR for edges between tables
-  if (schemaEdges.length > 0) {
+  // Add ALTER TABLE statements for edges between tables - but only if NOT using inline constraints
+  if (schemaEdges.length > 0 && !settings.useInlineConstraints) {
     const fkEdges = schemaEdges.filter(edge => {
       // Only include edges where both source and target are database tables (not enums)
       const sourceNode = schemaNodes.find(n => n.id === edge.source);
       const targetNode = schemaNodes.find(n => n.id === edge.target);
       return sourceNode && targetNode && 
             (sourceNode.type === "databaseSchema" || !sourceNode.type) && 
-            (targetNode.type === "databaseSchema" || !targetNode.type);
+            (targetNode.type === "databaseSchema" || !targetNode.type) &&
+            (!edge.data || edge.data.connectionType !== 'enum'); // Exclude enum connections
     });
     
-    if (fkEdges.length > 0 && !settings.useInlineConstraints) {
+    if (fkEdges.length > 0) {
       sql += "-- Foreign Key Constraints\n";
       fkEdges.forEach(edge => {
         const sourceNode = schemaNodes.find(n => n.id === edge.source);
@@ -234,16 +350,25 @@ export const generateSql = (
         
         if (!sourceNode || !targetNode) return;
         
-        // Parse the handle format to get the row name
-        const sourceColumn = edge.sourceHandle?.split('-').slice(1).join('-') || 'id';
-        const targetColumn = edge.targetHandle?.split('-').slice(1).join('-') || 'id';
+        // Parse the handle format to get the row name - improved for stability
+        const sourceHandle = edge.sourceHandle || '';
+        const targetHandle = edge.targetHandle || '';
+        
+        // Extract column names from handles
+        const sourceColumn = sourceHandle.startsWith('source-') 
+          ? sourceHandle.substring('source-'.length) 
+          : (edge.data?.sourceColumn || 'id');
+          
+        const targetColumn = targetHandle.startsWith('target-') 
+          ? targetHandle.substring('target-'.length) 
+          : (edge.data?.targetColumn || 'id');
         
         const sourceTableName = getQuotedTableName(sourceNode.data.label, settings.caseSensitiveIdentifiers);
         const targetTableName = getQuotedTableName(targetNode.data.label, settings.caseSensitiveIdentifiers);
         const sourceColumnName = getQuotedColumnName(sourceColumn, settings.caseSensitiveIdentifiers);
         const targetColumnName = getQuotedColumnName(targetColumn, settings.caseSensitiveIdentifiers);
         
-        // Create a constraint name that's safe for all SQL dialects
+        // Create a unique constraint name based on the tables and columns
         const constraintName = settings.caseSensitiveIdentifiers 
           ? `"fk_${sourceNode.data.label.replace(/\s/g, '_')}_${sourceColumn.replace(/\s/g, '_')}"`
           : `fk_${sourceNode.data.label.toLowerCase().replace(/\s/g, '_')}_${sourceColumn.toLowerCase().replace(/\s/g, '_')}`;

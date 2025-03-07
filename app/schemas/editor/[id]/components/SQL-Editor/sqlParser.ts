@@ -176,11 +176,38 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           }
           
           // Check for inline foreign key reference - IMPROVED to handle more cases
-          // This is the key change - improved foreign key detection in row definitions
+          // More comprehensive regex to catch inline REFERENCES pattern
           let inlineFkMatch = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
+          
+          // If not found with the first pattern, try an alternative that handles different SQL styles
           if (!inlineFkMatch) {
-            // Try an alternative regex that can handle SQL like: INT REFERENCES users(id)
-            inlineFkMatch = /\b(?:INT|INTEGER|SERIAL|UUID|VARCHAR|TEXT)\b.*?REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
+            // Handle formats like: INT REFERENCES users(id) and UUID REFERENCES users(id) ON DELETE CASCADE
+            inlineFkMatch = /\b(?:INT|INTEGER|SERIAL|UUID|VARCHAR|TEXT|TIMESTAMP|BOOLEAN|JSONB)\b.*?REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
+          }
+          
+          // If still not found, try a more generic approach that doesn't require type prefix
+          if (!inlineFkMatch) {
+            // This is a more generic pattern that might catch other variations
+            inlineFkMatch = /\bREFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
+          }
+          
+          // Improved regex pattern for inline foreign key detection
+          // First try the exact "REFERENCES" pattern
+          inlineFkMatch = /\bREFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
+          
+          if (!inlineFkMatch) {
+            // Try with quoted table name
+            inlineFkMatch = /\bREFERENCES\s+"([^"]+)"\s*\(\s*"?([^",\)]+)"?\s*\)/i.exec(constraintText);
+          }
+          
+          if (!inlineFkMatch) {
+            // Try with single quoted name
+            inlineFkMatch = /\bREFERENCES\s+'([^']+)'\s*\(\s*'?([^',\)]+)'?\s*\)/i.exec(constraintText);
+          }
+          
+          if (!inlineFkMatch) {
+            // Try most generic form 
+            inlineFkMatch = /\bREFERENCES\s+([\w\s]+)\s*\(\s*([\w\s]+)\s*\)/i.exec(constraintText);
           }
           
           let foreignKey = null;
@@ -211,7 +238,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               targetColumn: targetColumn
             });
             
-            console.log(`Added foreign key constraint: ${rowName} -> ${targetTable}(${targetColumn})`);
+            console.log(`Added inline foreign key constraint: ${rowName} -> ${targetTable}(${targetColumn})`);
           }
           
           // Handle duplicate row names
@@ -309,7 +336,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     console.log("Parsing ALTER TABLE statements with improved pattern...");
     
     // Improved regex that better handles quoted identifiers and whitespace
-    const alterTableRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+ADD\s+CONSTRAINT\s+(?:`|"|')?\w+(?:`|"|')?\s+FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
+    const alterTableRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+ADD\s+(?:CONSTRAINT\s+(?:`|"|')?\w+(?:`|"|')?\s+)?FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
     let alterMatch;
 
     while ((alterMatch = alterTableRegex.exec(sql)) !== null) {

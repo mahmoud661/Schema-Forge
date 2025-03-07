@@ -79,9 +79,16 @@ export function SqlEditor() {
       setEditableSql(newSql);
       setAppliedSql(newSql);
       
-      // Also update store
+      // Also update store - this ensures consistency
       updateCode(newSql);
     }
+    
+    // Log the settings change for debugging
+    console.log("SQL editor settings changed:", { 
+      dbType, 
+      useInlineConstraints: settings.useInlineConstraints,
+      caseSensitive: settings.caseSensitiveIdentifiers 
+    });
   }, [dbType, settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
   
   // Effect for live updates when SQL changes
@@ -91,6 +98,32 @@ export function SqlEditor() {
     }
   }, [editableSql, liveEditMode, isEditing]);
 
+  // Add a special effect to force reparse when settings change
+  useEffect(() => {
+    // Regenerate SQL completely when settings change
+    const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
+    
+    // Update all state
+    setSqlContent(newSql);
+    setAppliedSql(newSql);
+    
+    if (!isEditing) {
+      setEditableSql(newSql);
+    }
+    
+    // Also update store to maintain consistency
+    updateCode(newSql);
+    
+    // Log for debugging
+    console.log("Settings changed, regenerated SQL:", {
+      dbType,
+      useInlineConstraints: settings.useInlineConstraints,
+      caseSensitive: settings.caseSensitiveIdentifiers,
+      edgeCount: edges.length,
+      tableCount: nodes.filter(n => n.type === 'databaseSchema' || !n.type).length
+    });
+  }, [dbType, settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
+
   const handleToggleCaseSensitive = () => {
     updateSettings({ 
       ...settings,
@@ -98,11 +131,34 @@ export function SqlEditor() {
     });
   };
 
+  // Handle toggling inline constraints with immediate SQL reparse
   const handleToggleInlineConstraints = () => {
-    updateSettings({ 
+    console.log("Toggling inline constraints from", settings.useInlineConstraints, "to", !settings.useInlineConstraints);
+    
+    // First update the setting
+    updateSettings({
       ...settings,
-      useInlineConstraints: !settings.useInlineConstraints 
+      useInlineConstraints: !settings.useInlineConstraints
     });
+    
+    // Force regen in the next tick to ensure setting is updated first
+    setTimeout(() => {
+      const updatedSettings = {
+        ...settings,
+        useInlineConstraints: !settings.useInlineConstraints
+      };
+      
+      const newSql = generateSql(dbType, nodes, edges, enumTypes, updatedSettings);
+      setSqlContent(newSql);
+      setAppliedSql(newSql);
+      
+      if (!isEditing) {
+        setEditableSql(newSql);
+        updateCode(newSql);
+      }
+      
+      console.log("Settings toggle complete, SQL regenerated");
+    }, 10);
   };
 
   const handleDownload = () => {
