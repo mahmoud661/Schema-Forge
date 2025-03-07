@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { memo, useState, useEffect, useCallback } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { throttle } from "@/lib/performance-utils";
 
 interface ColorPickerProps {
   color: string;
@@ -14,7 +15,7 @@ interface ColorPickerProps {
   immediateUpdate?: boolean;
 }
 
-export function ColorPicker({
+export const ColorPicker = memo(function ColorPicker({
   color,
   onChange,
   label,
@@ -29,18 +30,36 @@ export function ColorPicker({
     setCurrentColor(color);
   }, [color]);
 
-  // Optimized color change handler with synchronous update
+  // Optimized color change handler with immediate feedback
   const handleColorChange = useCallback((newColor: string) => {
-    // Synchronously update both local state and propagate the change
+    // Update local state immediately for responsive UI
     setCurrentColor(newColor);
     
-    // Set a timeout of 0ms to push the onChange to the next event loop tick
-    // This helps ensure React has time to process state updates
-    setTimeout(() => {
-      onChange(newColor);
-    }, 0);
+    // For immediate visual feedback without waiting for React
+    if (typeof document !== 'undefined') {
+      // Apply global style for immediate preview
+      const styleId = 'color-preview-style';
+      let styleEl = document.getElementById(styleId) as HTMLStyleElement;
+      
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+      
+      // Update color variables for live preview
+      styleEl.textContent = `
+        .preview-color-${newColor.substring(1)} {
+          background-color: ${newColor} !important;
+          border-color: ${newColor} !important;
+        }
+      `;
+    }
     
-    // Only close if we're not doing immediate updates
+    // Call the actual handler without throttle for immediate update
+    onChange(newColor);
+    
+    // Close the popover when a color is selected
     if (!immediateUpdate) {
       setIsOpen(false);
     }
@@ -117,4 +136,9 @@ export function ColorPicker({
       </Popover>
     </div>
   );
-}
+}, (prev, next) => {
+  // Only re-render if these specific props change
+  return prev.color === next.color && 
+         prev.label === next.label && 
+         prev.immediateUpdate === next.immediateUpdate;
+});

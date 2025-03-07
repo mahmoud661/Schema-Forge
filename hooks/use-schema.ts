@@ -176,46 +176,31 @@ const storeImplementation = (set: any) => ({
   updateNodeData: (nodeId: string, data: any) =>
     set(
       (state: any) => {
-        // Fast path for color updates with improved visual feedback
-        if (data.color !== undefined) {
-          // Generate a unique timestamp to ensure style changes are detected
-          const updateTimestamp = Date.now();
-          
+        // Special case for color updates to minimize re-renders
+        if (data.color !== undefined && Object.keys(data).length === 1) {
+          // Use a more targeted update approach for colors
           const updatedNodes = state.schema.nodes.map((node: SchemaNode) => {
             if (node.id === nodeId) {
-              // Create a fresh style object to ensure React detects the change
-              const newStyle = { 
-                ...(node.style || {}), 
-                '--colorUpdateTimestamp': updateTimestamp,
-                '--colorValue': JSON.stringify(data.color || 'default')
-              };
-              
-              // Return a new object to ensure React detects the change
+              // Only update the color property without triggering full node rebuild
               return {
                 ...node,
                 data: { 
                   ...node.data, 
                   color: data.color 
                 },
-                // Force style changes with a completely new object and unique timestamp
-                style: newStyle,
-                // Add a hidden data attribute to force re-render
-                _colorUpdate: updateTimestamp
+                // Add an internal marker to track color updates
+                _colorUpdated: Date.now(),
               };
             }
             return node;
           });
           
+          // Similarly, targeted update for selectedNode if it's the one being colored
           const updatedSelectedNode = state.schema.selectedNode?.id === nodeId
             ? {
                 ...state.schema.selectedNode,
                 data: { ...state.schema.selectedNode.data, color: data.color },
-                style: { 
-                  ...(state.schema.selectedNode.style || {}), 
-                  '--colorUpdateTimestamp': updateTimestamp,
-                  '--colorValue': JSON.stringify(data.color || 'default')
-                },
-                _colorUpdate: updateTimestamp
+                _colorUpdated: Date.now()
               }
             : state.schema.selectedNode;
           
@@ -224,8 +209,8 @@ const storeImplementation = (set: any) => ({
               ...state.schema,
               nodes: updatedNodes,
               selectedNode: updatedSelectedNode,
-              // This will trigger a global store update to notify subscribers
-              _lastColorUpdate: updateTimestamp
+              // Skip updating other properties to prevent cascading re-renders
+              _lastColorUpdate: Date.now() // Add marker for subscribers
             },
           };
         }

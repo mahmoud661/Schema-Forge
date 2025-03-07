@@ -159,6 +159,26 @@ export function Sidebar({
     toast.success("Reset to default table colors");
   }, [updateNodeData, onUpdateNode]);
 
+  // Fast Color Update function
+  const handleFastColorChange = useCallback((nodeId: string, tableColor: any, colorType: 'light' | 'dark' | 'border', color: string) => {
+    // Update the color in the component
+    const newColor = { ...tableColor, [colorType]: color };
+    
+    // Use the super-fast direct DOM updater if available
+    if (typeof window !== 'undefined' && window.__schemaColorUpdater) {
+      // @ts-ignore - Using our global handler for performance
+      window.__schemaColorUpdater(nodeId, newColor);
+    } else {
+      // Fall back to standard update
+      updateNodeData(nodeId, { color: newColor });
+    }
+    
+    // Also update via prop method for parent components
+    onUpdateNode({
+      color: newColor
+    });
+  }, [updateNodeData, onUpdateNode]);
+
   // Render table content only when a table is selected
   const renderTableContent = (node: SchemaNode) => {
     if (node.id !== selectedNode?.id || selectedNode.type === 'enumType') return null;
@@ -206,18 +226,18 @@ export function Sidebar({
                     <ColorPicker
                       label="Light Mode"
                       color={tableColor.light}
-                      onChange={(color) => handleColorChange(node.id, tableColor, 'light', color)}
+                      onChange={(color) => handleFastColorChange(node.id, tableColor, 'light', color)}
                     />
                     <ColorPicker
                       label="Dark Mode"
                       color={tableColor.dark}
-                      onChange={(color) => handleColorChange(node.id, tableColor, 'dark', color)}
+                      onChange={(color) => handleFastColorChange(node.id, tableColor, 'dark', color)}
                     />
                   </div>
                   <ColorPicker
                     label="Border Accent"
                     color={tableColor.border}
-                    onChange={(color) => handleColorChange(node.id, tableColor, 'border', color)}
+                    onChange={(color) => handleFastColorChange(node.id, tableColor, 'border', color)}
                   />
                   
                   {isTableColorCustomized && (

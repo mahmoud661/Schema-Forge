@@ -74,6 +74,38 @@ export function SchemaFlow() {
     return () => unsubscribe();
   }, []);
 
+  // Add a specialized handler for color updates that's fast
+  const handleColorUpdate = useCallback((nodeId, color) => {
+    // Find the node element in ReactFlow
+    const nodeElement = document.querySelector(`[data-id="${nodeId}"] .node-header`);
+    if (nodeElement) {
+      // Directly update DOM style for instant feedback
+      const isDarkMode = document.documentElement.classList.contains('dark');
+      nodeElement.setAttribute('style', `
+        background-color: ${isDarkMode ? color.dark : color.light};
+        border-bottom: 2px solid ${color.border};
+      `);
+    }
+    
+    // Then update the store normally
+    updateNodeData(nodeId, { color });
+  }, []);
+  
+  // Expose the fast color update handler to child components
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // @ts-ignore - This is an intentional global for optimization
+      window.__schemaColorUpdater = handleColorUpdate;
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        // @ts-ignore
+        delete window.__schemaColorUpdater;
+      }
+    };
+  }, [handleColorUpdate]);
+
   // Performance enhancement: Optimize panning and viewport for large diagrams
   const onInit = useCallback((reactFlowInstance: ViewportHelperFunctions) => {
     reactFlowInstance.fitView({
@@ -83,11 +115,21 @@ export function SchemaFlow() {
     });
   }, []);
 
+  // Create an efficient memoization key that doesn't change for color-only updates
+  const memoKey = useMemo(() => {
+    return {
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      selectedNodeId: selectedNode?.id || 'none',
+      lastStructuralUpdate: nodes.map(node => node._colorUpdated ? '' : node.id).join('|')
+    };
+  }, [nodes, edges, selectedNode]);
+  
   // Performance enhancement: Use a memoization for the ReactFlow content
   const MemoizedReactFlow = useMemo(() => {
+    console.log("Re-rendering ReactFlow");
     return (
       <ReactFlow
-        key={`reactflow-${refreshKey}`} // Force complete re-render on color changes
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -125,8 +167,7 @@ export function SchemaFlow() {
         <FlowControls />
       </ReactFlow>
     );
-  }, [nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick, onNodeDelete, 
-      onEdgeClick, onInit, onDragOver, onDrop, refreshKey]); // Add refreshKey dependency
+  }, [memoKey]); // Only depend on memoKey to prevent re-renders for color changes
 
   // Render the appropriate sidebar content based on the active tab
   const renderSidebar = () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useState, useMemo } from "react";
+import { memo, useEffect, useState, useMemo, useRef } from "react";
 import { Position, Handle } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { themeAwareStringToColor } from "@/lib/utils";
@@ -50,23 +50,19 @@ const SchemaNode = memo(
     const [mounted, setMounted] = useState(false);
     const { resolvedTheme } = useTheme();
     const isDarkMode = resolvedTheme === 'dark';
+    const nodeRef = useRef<HTMLDivElement>(null);
     
-    // Force re-render on color change by using the color as a direct key in state
-    const [colorUpdateKey, setColorUpdateKey] = useState(Date.now());
-    
-    // Update the key when color changes to force a re-render
-    useEffect(() => {
-      setColorUpdateKey(Date.now());
-    }, [data.color]);
-    
-    // Use stored color if available, or compute a fallback color based on node ID
-    const { headerColor, headerBgColor } = useMemo(() => {
+    // Extract color values once and memoize to prevent recalculation
+    const { headerColor, headerBgColor, nodeStyle } = useMemo(() => {
       // If color is stored in the node data, use it
       if (data.color) {
-        return {
-          headerColor: data.color.border,
-          headerBgColor: isDarkMode ? data.color.dark : data.color.light
+        const headerColor = data.color.border;
+        const headerBgColor = isDarkMode ? data.color.dark : data.color.light;
+        const nodeStyle = {
+          backgroundColor: headerBgColor,
+          borderBottom: `2px solid ${headerColor}`
         };
+        return { headerColor, headerBgColor, nodeStyle };
       }
       
       // Fallback for legacy nodes without stored color
@@ -75,11 +71,34 @@ const SchemaNode = memo(
       ) % TABLE_COLORS.length;
       
       const colorSet = TABLE_COLORS[colorIndex];
-      return {
-        headerColor: colorSet.border,
-        headerBgColor: isDarkMode ? colorSet.dark : colorSet.light
+      const headerColor = colorSet.border;
+      const headerBgColor = isDarkMode ? colorSet.dark : colorSet.light;
+      const nodeStyle = {
+        backgroundColor: headerBgColor,
+        borderBottom: `2px solid ${headerColor}`
       };
-    }, [data.id, data.color, isDarkMode, colorUpdateKey]); 
+      
+      return { headerColor, headerBgColor, nodeStyle };
+    }, [data.color, data.id, isDarkMode]);
+
+    // Direct DOM update for color changes - very performant
+    useEffect(() => {
+      if (mounted && nodeRef.current && data._colorUpdated) {
+        // Find the header element
+        const header = nodeRef.current.querySelector('.node-header');
+        if (header && data.color) {
+          // Apply styles directly to the DOM for instant update
+          header.setAttribute('style', `
+            background-color: ${isDarkMode ? data.color.dark : data.color.light};
+            border-bottom: 2px solid ${data.color.border};
+          `);
+        }
+      }
+    }, [data._colorUpdated, isDarkMode, mounted]);
+
+    useEffect(() => {
+      setMounted(true);
+    }, []);
     
     // Move tableRows useMemo before conditional as well
     const tableRows = useMemo(() => {
@@ -196,16 +215,6 @@ const SchemaNode = memo(
         );
       });
     }, [data.schema, duplicateRows, isDarkMode, mounted]);
-    
-    useEffect(() => {
-      setMounted(true);
-    }, []);
-
-    // Set style directly on the component instead of just passing it down
-    const nodeStyle = useMemo(() => ({
-      backgroundColor: headerBgColor,
-      borderBottom: `2px solid ${headerColor}`
-    }), [headerBgColor, headerColor]);
 
     if (!mounted) {
       return (
@@ -226,17 +235,17 @@ const SchemaNode = memo(
       );
     }
     
+    // Use the memoized nodeStyle directly
     return (
       <DatabaseSchemaNode 
+        ref={nodeRef}
         className={`p-0 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md'}`} 
         selected={selected}
-        key={`node-${data.id}-${colorUpdateKey}`} // Add color key to force re-render
       >
         <DatabaseSchemaNodeHeader>
           <div 
-            className="w-full rounded-t-md py-2 px-3 font-medium"
-            style={nodeStyle} // Apply style directly
-            key={`header-${colorUpdateKey}`} // Force header re-render on color change
+            className="w-full rounded-t-md py-2 px-3 font-medium node-header"
+            style={nodeStyle}
           >
             {data.label}
           </div>
@@ -261,13 +270,16 @@ const SchemaNode = memo(
     );
   },
   (prevProps, nextProps) => {
-    // More precise comparison for better memo effectiveness
+    // Optimize the equality check to reduce re-renders
     if (prevProps.selected !== nextProps.selected) return false;
     
-    // Add special check for color
-    const prevColor = JSON.stringify(prevProps.data.color);
-    const nextColor = JSON.stringify(nextProps.data.color);
-    if (prevColor !== nextColor) return false;
+    // Fast path check for color-only changes
+    if (prevProps._colorUpdated !== nextProps._colorUpdated &&
+        prevProps.data.id === nextProps.data.id && 
+        JSON.stringify(prevProps.data.color) !== JSON.stringify(nextProps.data.color)) {
+      // Allow color updates but don't re-check the rest of the data
+      return false;
+    }
     
     // Compare data structure more efficiently
     const prevData = prevProps.data;
@@ -277,14 +289,19 @@ const SchemaNode = memo(
     if (prevData.id !== nextData.id) return false;
     
     // Schema length check
-    if (prevData.schema.length !== nextData.schema.length) return false;
+    if (prevData.schema?.length !== nextData.schema?.length) return false;
     
     // Check if duplicateRows has changed
     const prevDups = JSON.stringify(prevProps.duplicateRows || {});
     const nextDups = JSON.stringify(nextProps.duplicateRows || {});
     if (prevDups !== nextDups) return false;
     
-    // Deep schema comparison only when necessary
+    // Skip detailed schema comparison if only color changed
+    if (prevProps._colorUpdated !== nextProps._colorUpdated) {
+      return true; // Schema didn't change, only color did
+    }
+    
+    // Otherwise do the full deep comparison
     for (let i = 0; i < prevData.schema.length; i++) {
       const prevCol = prevData.schema[i];
       const nextCol = nextData.schema[i];
