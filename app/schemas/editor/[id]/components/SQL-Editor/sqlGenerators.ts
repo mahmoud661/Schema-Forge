@@ -5,11 +5,11 @@ export const getQuotedTableName = (tableName: string, useCaseSensitive: boolean 
   return tableName;
 };
 
-export const getQuotedColumnName = (columnName: string, useCaseSensitive: boolean = false): string => {
+export const getQuotedColumnName = (rowName: string, useCaseSensitive: boolean = false): string => {
   if (useCaseSensitive) {
-    return `"${columnName.replace(/"/g, '""')}"`;
+    return `"${rowName.replace(/"/g, '""')}"`;
   }
-  return columnName;
+  return rowName;
 };
 
 export const mapToBaseType = (sqlType: string): string => {
@@ -69,8 +69,8 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
   const foreignKeys: string[] = [];
   
   node.data.schema.forEach((row: any, index: number) => {
-    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
-    sql += `  ${columnName} ${row.type}`;
+    const rowName = getQuotedColumnName(row.title, useCaseSensitive);
+    sql += `  ${rowName} ${row.type}`;
     
     // Handle defaults
     if (row.default) {
@@ -101,7 +101,7 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
     } else if (row.foreignKey && !useInlineConstraints) {
       // Store for later ALTER TABLE statements
       foreignKeys.push({
-        row: columnName,
+        row: rowName,
         refTable: row.foreignKey.table,
         refColumn: row.foreignKey.row,
         onDelete: row.foreignKey.onDelete,
@@ -114,7 +114,7 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
   
   sql += ');';
   
-  // Create indexes for columns marked as index but not primary
+  // Create indexes for rows marked as index but not primary
   node.data.schema.forEach((row: any) => {
     if (row.constraints && row.constraints.includes('index') && !row.constraints.includes('primary')) {
       const safeTableName = useCaseSensitive ? 
@@ -138,8 +138,8 @@ export const generateMySqlTable = (node: any, useCaseSensitive: boolean = false)
     if (row.type === 'text') mysqlType = 'TEXT';
     if (row.type === 'int4') mysqlType = 'INT';
     if (row.type === 'timestamp') mysqlType = 'DATETIME';
-    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
-    sql += `  ${columnName} ${mysqlType}`;
+    const rowName = getQuotedColumnName(row.title, useCaseSensitive);
+    sql += `  ${rowName} ${mysqlType}`;
     if (row.constraints) {
       if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
       if (row.constraints.includes('notnull')) sql += ' NOT NULL';
@@ -165,8 +165,8 @@ export const generateSqliteTable = (node: any, useCaseSensitive: boolean = false
     if (row.type === 'int4') sqliteType = 'INTEGER';
     if (row.type === 'timestamp') sqliteType = 'DATETIME';
     if (row.type === 'money') sqliteType = 'REAL';
-    const columnName = getQuotedColumnName(row.title, useCaseSensitive);
-    sql += `  ${columnName} ${sqliteType}`;
+    const rowName = getQuotedColumnName(row.title, useCaseSensitive);
+    sql += `  ${rowName} ${sqliteType}`;
     if (row.constraints) {
       if (row.constraints.includes('primary')) sql += ' PRIMARY KEY';
       if (row.constraints.includes('notnull')) sql += ' NOT NULL';

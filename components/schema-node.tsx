@@ -42,14 +42,22 @@ interface DuplicateInfo {
 }
 
 const SchemaNode = memo(
-  ({ data, selected, duplicateColumns }: { 
+  ({ data, selected, duplicateRows }: { 
     data: SchemaNodeData; 
     selected?: boolean;
-    duplicateColumns?: Record<string, DuplicateInfo>;
+    duplicateRows?: Record<string, DuplicateInfo>;
   }) => {
     const [mounted, setMounted] = useState(false);
     const { resolvedTheme } = useTheme();
     const isDarkMode = resolvedTheme === 'dark';
+    
+    // Force re-render on color change by using the color as a direct key in state
+    const [colorUpdateKey, setColorUpdateKey] = useState(Date.now());
+    
+    // Update the key when color changes to force a re-render
+    useEffect(() => {
+      setColorUpdateKey(Date.now());
+    }, [data.color]);
     
     // Use stored color if available, or compute a fallback color based on node ID
     const { headerColor, headerBgColor } = useMemo(() => {
@@ -71,7 +79,7 @@ const SchemaNode = memo(
         headerColor: colorSet.border,
         headerBgColor: isDarkMode ? colorSet.dark : colorSet.light
       };
-    }, [data.id, data.color, isDarkMode]);
+    }, [data.id, data.color, isDarkMode, colorUpdateKey]); 
     
     // Move tableRows useMemo before conditional as well
     const tableRows = useMemo(() => {
@@ -86,14 +94,14 @@ const SchemaNode = memo(
         const isNotNull = constraints.includes('notnull');
         const isIndex = constraints.includes('index');
         const isEnum = row.type.startsWith('enum_'); 
-        const duplicateInfo = duplicateColumns?.[row.title];
+        const duplicateInfo = duplicateRows?.[row.title];
         
-        const columnKey = row.id || `${idx}-${row.title}`;
+        const rowKey = row.id || `${idx}-${row.title}`;
         const enumName = isEnum ? row.type.replace('enum_', '') : null;
 
         return (
           <DatabaseSchemaTableRow 
-            key={columnKey} 
+            key={rowKey} 
             className={cn(
               "hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors duration-150",
               duplicateInfo?.isDuplicate && "bg-yellow-50/30 dark:bg-yellow-900/20",
@@ -187,11 +195,17 @@ const SchemaNode = memo(
           </DatabaseSchemaTableRow>
         );
       });
-    }, [data.schema, duplicateColumns, isDarkMode, mounted]);
+    }, [data.schema, duplicateRows, isDarkMode, mounted]);
     
     useEffect(() => {
       setMounted(true);
     }, []);
+
+    // Set style directly on the component instead of just passing it down
+    const nodeStyle = useMemo(() => ({
+      backgroundColor: headerBgColor,
+      borderBottom: `2px solid ${headerColor}`
+    }), [headerBgColor, headerColor]);
 
     if (!mounted) {
       return (
@@ -216,14 +230,13 @@ const SchemaNode = memo(
       <DatabaseSchemaNode 
         className={`p-0 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md'}`} 
         selected={selected}
+        key={`node-${data.id}-${colorUpdateKey}`} // Add color key to force re-render
       >
         <DatabaseSchemaNodeHeader>
           <div 
             className="w-full rounded-t-md py-2 px-3 font-medium"
-            style={{ 
-              backgroundColor: headerBgColor,
-              borderBottom: `2px solid ${headerColor}` 
-            }}
+            style={nodeStyle} // Apply style directly
+            key={`header-${colorUpdateKey}`} // Force header re-render on color change
           >
             {data.label}
           </div>
@@ -251,6 +264,11 @@ const SchemaNode = memo(
     // More precise comparison for better memo effectiveness
     if (prevProps.selected !== nextProps.selected) return false;
     
+    // Add special check for color
+    const prevColor = JSON.stringify(prevProps.data.color);
+    const nextColor = JSON.stringify(nextProps.data.color);
+    if (prevColor !== nextColor) return false;
+    
     // Compare data structure more efficiently
     const prevData = prevProps.data;
     const nextData = nextProps.data;
@@ -261,9 +279,9 @@ const SchemaNode = memo(
     // Schema length check
     if (prevData.schema.length !== nextData.schema.length) return false;
     
-    // Check if duplicateColumns has changed
-    const prevDups = JSON.stringify(prevProps.duplicateColumns || {});
-    const nextDups = JSON.stringify(nextProps.duplicateColumns || {});
+    // Check if duplicateRows has changed
+    const prevDups = JSON.stringify(prevProps.duplicateRows || {});
+    const nextDups = JSON.stringify(nextProps.duplicateRows || {});
     if (prevDups !== nextDups) return false;
     
     // Deep schema comparison only when necessary

@@ -67,7 +67,22 @@ export function SqlEditor() {
       setSqlContent(initialSql);
       setEditableSql(initialSql);
     }
-  }, [schema.settings, updateSettings]);
+  }, []);
+  
+  // Regenerate SQL when db type or settings change
+  useEffect(() => {
+    const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
+    setSqlContent(newSql);
+    
+    // Only update editable SQL if we're not currently editing
+    if (!isEditing) {
+      setEditableSql(newSql);
+      setAppliedSql(newSql);
+      
+      // Also update store
+      updateCode(newSql);
+    }
+  }, [dbType, settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
   
   // Effect for live updates when SQL changes
   useEffect(() => {

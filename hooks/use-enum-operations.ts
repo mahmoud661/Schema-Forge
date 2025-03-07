@@ -12,7 +12,7 @@ export const useEnumOperations = (
   const [newEnumValue, setNewEnumValue] = useState("");
   const { schema, updateEnumType, removeEnumType } = useSchemaStore();
   
-  // Get the updateEnumTypeNameInColumns function from useSchemaFlow
+  // Get the updateEnumTypeNameInRows function from useSchemaFlow
   // We need this in a component that uses useEnumOperations
   let schemaFlowFunctions: any = {};
   try {
@@ -21,18 +21,18 @@ export const useEnumOperations = (
     // Ignore - in some contexts useReactFlow won't be available
   }
   
-  const { updateEnumTypeNameInColumns, updateEnumEdges } = schemaFlowFunctions;
+  const { updateEnumTypeNameInRows, updateEnumEdges } = schemaFlowFunctions;
 
-  const findColumnsUsingEnum = () => {
+  const findRowsUsingEnum = () => {
     if (!selectedNode) return [];
     
     const usages: { table: string, row: string }[] = [];
     
     nodes.forEach(node => {
       if ((node.type === 'databaseSchema' || !node.type) && node.data.schema) {
-        node.data.schema.forEach((col: any) => {
-          if (col.type === `enum_${selectedNode.data.name}`) {
-            usages.push({ table: node.data.label, row: col.title });
+        node.data.schema.forEach((row: any) => {
+          if (row.type === `enum_${selectedNode.data.name}`) {
+            usages.push({ table: node.data.label, row: row.title });
           }
         });
       }
@@ -127,12 +127,12 @@ export const useEnumOperations = (
       });
     }
     
-    // Update all columns using this enum
-    if (updateEnumTypeNameInColumns) {
-      const updated = updateEnumTypeNameInColumns(oldName, newName);
+    // Update all rows using this enum
+    if (updateEnumTypeNameInRows) {
+      const updated = updateEnumTypeNameInRows(oldName, newName);
       
       if (updated) {
-        toast.info(`Updated ENUM reference in columns`);
+        toast.info(`Updated ENUM reference in rows`);
       }
     }
     
@@ -145,9 +145,9 @@ export const useEnumOperations = (
   const deleteEnumType = () => {
     if (!selectedNode) return;
     
-    const enumUsages = findColumnsUsingEnum();
+    const enumUsages = findRowsUsingEnum();
     if (enumUsages.length > 0) {
-      toast.error(`Cannot delete: This ENUM is used by ${enumUsages.length} column(s)`);
+      toast.error(`Cannot delete: This ENUM is used by ${enumUsages.length} row(s)`);
       return false;
     }
     
@@ -164,7 +164,7 @@ export const useEnumOperations = (
   return {
     newEnumValue,
     setNewEnumValue,
-    findColumnsUsingEnum,
+    findRowsUsingEnum,
     addEnumValue,
     removeEnumValue,
     renameEnumType,

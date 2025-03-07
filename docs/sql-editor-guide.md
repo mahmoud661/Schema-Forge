@@ -78,15 +78,15 @@ This regex accounts for different quoting styles and optional "IF NOT EXISTS" cl
 
 ### Row Parsing
 
-Columns are extracted by:
+Rows are extracted by:
 
 - Splitting the table content by commas (carefully handling commas inside parentheses)
 - Parsing individual row definitions with type and constraints
 - Handling quoted identifiers in various formats
 
 ```typescript
-const columns = [];
-const columnLines = tableContent
+const rows = [];
+const rowLines = tableContent
   .split(/,(?![^(]*\))/)
   .map(line => line.trim())
   .filter(line => line.length > 0);
@@ -111,14 +111,14 @@ The SQL generator (`sql-generator.ts`) creates SQL statements from the schema by
 For each node in the schema, a `CREATE TABLE` statement is generated with:
 
 - Table name derived from the node label
-- Columns generated from the node schema
+- Rows generated from the node schema
 - Primary key and other constraints based on row properties
 
 ### Constraint Generation
 
-- `PRIMARY KEY` constraints are added to columns with the 'primary' constraint
+- `PRIMARY KEY` constraints are added to rows with the 'primary' constraint
 - `FOREIGN KEY` constraints are generated from edges connecting nodes
-- Indexes are created for columns marked with the 'index' constraint
+- Indexes are created for rows marked with the 'index' constraint
 
 ### Database-Specific Syntax
 

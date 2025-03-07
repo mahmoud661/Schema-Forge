@@ -86,13 +86,13 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
     
     // Check for missing commas in row definitions
     if (stmt.toUpperCase().includes('CREATE TABLE') && stmt.includes('(')) {
-      const columnsSection = stmt.substring(stmt.indexOf('(') + 1, stmt.lastIndexOf(')'));
-      const lines = columnsSection.split('\n').filter(line => 
+      const rowsSection = stmt.substring(stmt.indexOf('(') + 1, stmt.lastIndexOf(')'));
+      const lines = rowsSection.split('\n').filter(line => 
         line.trim() && !line.trim().startsWith('--')
       );
       
       // Track row names to detect duplicates within a table
-      const columnNames = new Set<string>();
+      const rowNames = new Set<string>();
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -113,14 +113,14 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
         }
         
         // Check for duplicate row names
-        const columnNameMatch = /^(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+/i.exec(line);
-        if (columnNameMatch) {
-          const colName = (columnNameMatch[1] || columnNameMatch[2] || columnNameMatch[3] || columnNameMatch[4])?.toLowerCase();
-          if (colName && columnNames.has(colName)) {
+        const rowNameMatch = /^(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+/i.exec(line);
+        if (rowNameMatch) {
+          const colName = (rowNameMatch[1] || rowNameMatch[2] || rowNameMatch[3] || rowNameMatch[4])?.toLowerCase();
+          if (colName && rowNames.has(colName)) {
             errors.push(`Duplicate row name "${colName}" in table definition`);
           }
           if (colName) {
-            columnNames.add(colName);
+            rowNames.add(colName);
           }
         }
       }
@@ -255,7 +255,7 @@ export function fixCommonSqlIssues(sql: string): string {
     fixedSql = fixedSql.replace(block, fixedBlock);
   }
   
-  // Make sure quoted columns have closing quotes
+  // Make sure quoted rows have closing quotes
   const missingCloseQuoteRegex = /\("(\w+)(?!")(\s+\w+)/g;
   fixedSql = fixedSql.replace(missingCloseQuoteRegex, '("$1"$2');
   

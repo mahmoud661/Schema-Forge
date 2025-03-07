@@ -6,16 +6,16 @@ export function useEnumConnections() {
   const { schema, updateEdges } = useSchemaStore();
   
   /**
-   * Disconnect a column from an enum
+   * Disconnect a row from an enum
    * @param nodeId - ID of the table node
-   * @param columnTitle - Title of the column
+   * @param rowTitle - Title of the row
    * @returns Success flag
    */
-  const disconnectEnumFromColumn = useCallback((nodeId: string, columnTitle: string) => {
+  const disconnectEnumFromColumn = useCallback((nodeId: string, rowTitle: string) => {
     const { edges } = schema;
     
-    // Find edges connecting to this column's target handle
-    const targetHandle = `target-${columnTitle}`;
+    // Find edges connecting to this row's target handle
+    const targetHandle = `target-${rowTitle}`;
     const edgesToRemove = edges.filter(edge => 
       edge.target === nodeId && 
       edge.targetHandle === targetHandle &&
@@ -40,14 +40,14 @@ export function useEnumConnections() {
   }, [schema, updateEdges]);
   
   /**
-   * Check if a column is connected to an enum
+   * Check if a row is connected to an enum
    * @param nodeId - ID of the table node
-   * @param columnTitle - Title of the column
+   * @param rowTitle - Title of the row
    * @returns Boolean indicating if connected
    */
-  const isColumnConnectedToEnum = useCallback((nodeId: string, columnTitle: string) => {
+  const isColumnConnectedToEnum = useCallback((nodeId: string, rowTitle: string) => {
     const { edges } = schema;
-    const targetHandle = `target-${columnTitle}`;
+    const targetHandle = `target-${rowTitle}`;
     
     return edges.some(edge => 
       edge.target === nodeId && 

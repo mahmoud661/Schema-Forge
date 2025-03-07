@@ -1,11 +1,12 @@
 import { mapToBaseType } from "./sqlGenerators";
+import { useSchemaStore } from "@/hooks/use-schema";
 
 export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enumTypes?: any[] } | null => {
   try {
     const newNodes: any[] = [];
     const newEdges: any[] = [];
     const tableMap: Record<string, string> = {};
-    const columnMap: Record<string, Record<string, string>> = {}; // table -> row -> nodeId
+    const rowMap: Record<string, Record<string, string>> = {}; // table -> row -> nodeId
     const enumTypes: any[] = [];
     const enumNodeMap: Record<string, string> = {}; // enumName -> nodeId
     
@@ -14,6 +15,22 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     let enumMatch;
     let enumIndex = 0;
     
+    // Get existing nodes for position/color preservation
+    const existingNodesMap = new Map();
+    useSchemaStore.getState().schema.nodes.forEach(node => {
+      if (node.type === 'databaseSchema' || !node.type) {
+        existingNodesMap.set(node.data.label.toLowerCase(), node);
+      }
+    });
+
+    // Map for enum nodes
+    const existingEnumMap = new Map();
+    useSchemaStore.getState().schema.nodes.forEach(node => {
+      if (node.type === 'enumType') {
+        existingEnumMap.set(node.data.name.toLowerCase(), node);
+      }
+    });
+
     while ((enumMatch = enumRegex.exec(sql)) !== null) {
       const enumName = enumMatch[1].replace(/^["'`]|["'`]$/g, '');
       const valuesString = enumMatch[2];
@@ -35,11 +52,17 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       const nodeId = `enum-node-${Date.now()}-${enumIndex}`;
       enumNodeMap[enumName.toLowerCase()] = nodeId;
       
-      // Add the enum node to the newNodes array
+      // Check if enum already exists to preserve position
+      const existingEnum = existingEnumMap.get(enumName.toLowerCase());
+      const enumPosition = existingEnum 
+        ? existingEnum.position 
+        : { x: 100 + enumIndex * 250, y: 100 };
+      
+      // Add the enum node to the newNodes array with preserved position
       newNodes.push({
         id: nodeId,
         type: 'enumType',
-        position: { x: 100 + enumIndex * 250, y: 100 },
+        position: enumPosition,
         data: { name: enumName, values: values }
       });
       
@@ -52,7 +75,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     let tableIndex = 0;
     let foundTables = false;
     
-    // Next, extract tables and columns
+    // Next, extract tables and rows
     while ((tableMatch = tableRegex.exec(sql)) !== null) {
       foundTables = true;
       const tableName = tableMatch[1] || tableMatch[2] || tableMatch[3] || tableMatch[4];
@@ -64,21 +87,21 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       const nodeId = `sql-node-${Date.now()}-${tableIndex}`;
       tableMap[normalizedName] = nodeId;
       tableMap[tableName] = nodeId; // Also store with original case
-      columnMap[normalizedName] = {};
+      rowMap[normalizedName] = {};
       
       console.log(`Parsed table: "${tableName}" with ID: ${nodeId}`);
       
-      const columns: any[] = [];
+      const rows: any[] = [];
       // Split by commas not inside parentheses
-      const columnLines = tableContent.split(/,(?![^(]*\))/)
+      const rowLines = tableContent.split(/,(?![^(]*\))/)
         .map(line => line.trim()).filter(line => line.length > 0);
-      const columnNames = new Set();
+      const rowNames = new Set();
       const inlineConstraints: any[] = [];
       
-      for (const columnLine of columnLines) {
+      for (const rowLine of rowLines) {
         // Check if line is a foreign key constraint
-        if (/FOREIGN\s+KEY/i.test(columnLine)) {
-          const fkMatch = /FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(columnLine);
+        if (/FOREIGN\s+KEY/i.test(rowLine)) {
+          const fkMatch = /FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
           if (fkMatch) {
             inlineConstraints.push({
               sourceColumn: fkMatch[1].trim().replace(/^["'`]|["'`]$/g, ''),
@@ -90,20 +113,20 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         }
         
         // Skip other constraints
-        if (/^\s*(?:PRIMARY\s+KEY|UNIQUE|CHECK|CONSTRAINT)/i.test(columnLine)) {
+        if (/^\s*(?:PRIMARY\s+KEY|UNIQUE|CHECK|CONSTRAINT)/i.test(rowLine)) {
           continue;
         }
         
         // Parse regular row definitions with enhanced regex for ENUM types and defaults
-        const columnRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\([^)]*\))?)(?:\s+(.*))?$/i;
-        const columnMatch = columnLine.match(columnRegex);
+        const rowRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\([^)]*\))?)(?:\s+(.*))?$/i;
+        const rowMatch = rowLine.match(rowRegex);
         
-        if (columnMatch) {
-          let columnName = columnMatch[1] || columnMatch[2] || columnMatch[3] || columnMatch[4];
+        if (rowMatch) {
+          let rowName = rowMatch[1] || rowMatch[2] || rowMatch[3] || rowMatch[4];
           // Strip leading/trailing quotes
-          columnName = columnName.replace(/^["'`]|["'`]$/g, '');
-          let columnType = columnMatch[5];
-          const constraintText = columnMatch[6] || '';
+          rowName = rowName.replace(/^["'`]|["'`]$/g, '');
+          let rowType = rowMatch[5];
+          const constraintText = rowMatch[6] || '';
           const constraints: string[] = [];
           
           // Check if the type is an ENUM or references an enum
@@ -111,26 +134,26 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           let enumTypeName = '';
           
           // Check both for exact enum type name and for enum_prefix format
-          if (columnType.startsWith('enum_')) {
+          if (rowType.startsWith('enum_')) {
             // Format: enum_typename
             isEnum = true;
-            enumTypeName = columnType.substring(5); // Remove 'enum_' prefix
+            enumTypeName = rowType.substring(5); // Remove 'enum_' prefix
           } else {
             // Check if the type directly matches an enum name (case-insensitive)
             const matchingEnum = enumTypes.find(et => 
-              et.name.toLowerCase() === columnType.toLowerCase()
+              et.name.toLowerCase() === rowType.toLowerCase()
             );
             
             if (matchingEnum) {
               isEnum = true;
               enumTypeName = matchingEnum.name;
               // Convert to standard format for consistency
-              columnType = `enum_${enumTypeName.toLowerCase()}`;
+              rowType = `enum_${enumTypeName.toLowerCase()}`;
             }
           }
           
-          if (columnType.toUpperCase() === 'SERIAL') {
-            columnType = 'int4';
+          if (rowType.toUpperCase() === 'SERIAL') {
+            rowType = 'int4';
             constraints.push('primary');
           }
           
@@ -153,11 +176,11 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           }
           
           // Check for inline foreign key reference - IMPROVED to handle more cases
-          // This is the key change - improved foreign key detection in column definitions
+          // This is the key change - improved foreign key detection in row definitions
           let inlineFkMatch = /REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
           if (!inlineFkMatch) {
             // Try an alternative regex that can handle SQL like: INT REFERENCES users(id)
-            inlineFkMatch = /\b(?:INT|INTEGER|SERIAL|UUID|VARCHAR|TEXT)\b.*?REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(columnLine);
+            inlineFkMatch = /\b(?:INT|INTEGER|SERIAL|UUID|VARCHAR|TEXT)\b.*?REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
           }
           
           let foreignKey = null;
@@ -183,49 +206,49 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
             }
             
             inlineConstraints.push({
-              sourceColumn: columnName,
+              sourceColumn: rowName,
               targetTable: targetTable,
               targetColumn: targetColumn
             });
             
-            console.log(`Added foreign key constraint: ${columnName} -> ${targetTable}(${targetColumn})`);
+            console.log(`Added foreign key constraint: ${rowName} -> ${targetTable}(${targetColumn})`);
           }
           
           // Handle duplicate row names
-          if (columnNames.has(columnName.toLowerCase())) {
+          if (rowNames.has(rowName.toLowerCase())) {
             let suffix = 1;
-            let newName = `${columnName}_${suffix}`;
-            while (columnNames.has(newName.toLowerCase())) {
+            let newName = `${rowName}_${suffix}`;
+            while (rowNames.has(newName.toLowerCase())) {
               suffix++;
-              newName = `${columnName}_${suffix}`;
+              newName = `${rowName}_${suffix}`;
             }
-            columnName = newName;
+            rowName = newName;
           }
           
-          columnNames.add(columnName.toLowerCase());
-          const columnId = `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          columnMap[normalizedName][columnName.toLowerCase()] = columnId;
+          rowNames.add(rowName.toLowerCase());
+          const rowId = `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          rowMap[normalizedName][rowName.toLowerCase()] = rowId;
           
-          columns.push({
-            title: columnName,
-            type: columnType,  // Keep the enum_prefixed format
+          rows.push({
+            title: rowName,
+            type: rowType,  // Keep the enum_prefixed format
             constraints,
-            id: columnId,
+            id: rowId,
             default: defaultValue,
             foreignKey
           });
           
-          // If this is an enum column, create an edge connection to the enum node
+          // If this is an enum row, create an edge connection to the enum node
           if (isEnum) {
             const enumNodeId = enumNodeMap[enumTypeName.toLowerCase()];
             if (enumNodeId) {
-              // Create edge from enum node to this column
+              // Create edge from enum node to this row
               newEdges.push({
                 id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 source: enumNodeId,
                 target: nodeId,  // The table node
                 sourceHandle: `enum-source-${enumTypeName}`,
-                targetHandle: `target-${columnName}`,
+                targetHandle: `target-${rowName}`,
                 type: 'smoothstep',
                 animated: true,
                 label: 'enum type',
@@ -237,12 +260,28 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         }
       }
       
-      if (columns.length > 0) {
+      if (rows.length > 0) {
+        // Check if this table already exists to preserve position and color
+        const existingNode = existingNodesMap.get(normalizedName);
+        
+        // If node exists, use its position and color; otherwise use defaults
+        const position = existingNode 
+          ? existingNode.position 
+          : { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 };
+        
+        // Preserve color if it exists
+        const color = existingNode?.data?.color;
+        
         newNodes.push({
           id: nodeId,
           type: 'databaseSchema',
-          position: { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 },
-          data: { label: tableName, schema: columns }
+          position: position,
+          data: { 
+            label: tableName, 
+            schema: rows,
+            // Only include color if it was previously set
+            ...(color && { color })
+          }
         });
         
         // Process inline foreign key constraints - ENHANCED for better tracking

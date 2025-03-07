@@ -29,7 +29,7 @@ interface SchemaState {
     selectedNode: SchemaNode | null;
     selectedEdge: Edge | null;
     activeTab: string;
-    duplicateColumns: Record<string, any>;
+    duplicateRows: Record<string, any>;
     enumTypes: EnumType[];
     settings: {
       caseSensitiveIdentifiers: boolean;
@@ -47,7 +47,7 @@ interface SchemaState {
   updateSelectedEdge: (data: Partial<Edge>) => void;
   updateNodeData: (nodeId: string, data: any) => void;
   updateActiveTab: (activeTab: string) => void;
-  setDuplicateColumns: (duplicateColumns: Record<string, any>) => void;
+  setDuplicateRows: (duplicateRows: Record<string, any>) => void;
   updateSettings: (settings: Partial<SchemaState["schema"]["settings"]>) => void;
   addEnumType: (enumType: EnumType) => void;
   updateEnumType: (index: number, enumType: EnumType) => void;
@@ -73,7 +73,7 @@ const initialSchema = {
   selectedNode: null,
   selectedEdge: null,
   activeTab: "visual",
-  duplicateColumns: {},
+  duplicateRows: {},
   enumTypes: [],
   settings: {
     caseSensitiveIdentifiers: false,
@@ -175,23 +175,80 @@ const storeImplementation = (set: any) => ({
 
   updateNodeData: (nodeId: string, data: any) =>
     set(
-      (state: any) => ({
-        schema: {
-          ...state.schema,
-          nodes: state.schema.nodes.map((node: SchemaNode) =>
-            node.id === nodeId
-              ? { ...node, data: { ...node.data, ...data } }
-              : node
-          ),
-          selectedNode:
-            state.schema.selectedNode?.id === nodeId
-              ? {
-                  ...state.schema.selectedNode,
-                  data: { ...state.schema.selectedNode.data, ...data },
-                }
-              : state.schema.selectedNode,
-        },
-      }),
+      (state: any) => {
+        // Fast path for color updates with improved visual feedback
+        if (data.color !== undefined) {
+          // Generate a unique timestamp to ensure style changes are detected
+          const updateTimestamp = Date.now();
+          
+          const updatedNodes = state.schema.nodes.map((node: SchemaNode) => {
+            if (node.id === nodeId) {
+              // Create a fresh style object to ensure React detects the change
+              const newStyle = { 
+                ...(node.style || {}), 
+                '--colorUpdateTimestamp': updateTimestamp,
+                '--colorValue': JSON.stringify(data.color || 'default')
+              };
+              
+              // Return a new object to ensure React detects the change
+              return {
+                ...node,
+                data: { 
+                  ...node.data, 
+                  color: data.color 
+                },
+                // Force style changes with a completely new object and unique timestamp
+                style: newStyle,
+                // Add a hidden data attribute to force re-render
+                _colorUpdate: updateTimestamp
+              };
+            }
+            return node;
+          });
+          
+          const updatedSelectedNode = state.schema.selectedNode?.id === nodeId
+            ? {
+                ...state.schema.selectedNode,
+                data: { ...state.schema.selectedNode.data, color: data.color },
+                style: { 
+                  ...(state.schema.selectedNode.style || {}), 
+                  '--colorUpdateTimestamp': updateTimestamp,
+                  '--colorValue': JSON.stringify(data.color || 'default')
+                },
+                _colorUpdate: updateTimestamp
+              }
+            : state.schema.selectedNode;
+          
+          return {
+            schema: {
+              ...state.schema,
+              nodes: updatedNodes,
+              selectedNode: updatedSelectedNode,
+              // This will trigger a global store update to notify subscribers
+              _lastColorUpdate: updateTimestamp
+            },
+          };
+        }
+        
+        // Original implementation for other updates
+        return {
+          schema: {
+            ...state.schema,
+            nodes: state.schema.nodes.map((node: SchemaNode) =>
+              node.id === nodeId
+                ? { ...node, data: { ...node.data, ...data } }
+                : node
+            ),
+            selectedNode:
+              state.schema.selectedNode?.id === nodeId
+                ? {
+                    ...state.schema.selectedNode,
+                    data: { ...state.schema.selectedNode.data, ...data },
+                  }
+                : state.schema.selectedNode,
+          },
+        };
+      },
       false,
       "updateNodeData"
     ),
@@ -205,13 +262,13 @@ const storeImplementation = (set: any) => ({
       "updateActiveTab"
     ),
 
-  setDuplicateColumns: (duplicateColumns: Record<string, any>) =>
+  setDuplicateRows: (duplicateRows: Record<string, any>) =>
     set(
       (state: any) => ({
-        schema: { ...state.schema, duplicateColumns },
+        schema: { ...state.schema, duplicateRows },
       }),
       false,
-      "setDuplicateColumns"
+      "setDuplicateRows"
     ),
 
   updateSettings: (settings: Partial<SchemaState["schema"]["settings"]>) =>

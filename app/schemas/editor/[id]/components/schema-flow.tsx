@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, memo, useMemo, useEffect, useState } from "react";
 import { ReactFlow, ReactFlowProvider, useReactFlow, ViewportHelperFunctions } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "@/lib/schema-flow-styles.css";
@@ -26,7 +26,7 @@ export function SchemaFlow() {
   const { schema, updateActiveTab } = useSchemaStore();
   const { nodes, edges, activeTab } = schema;
   
-  const {
+  const  {
     onNodesChange,
     onEdgesChange,
     onConnect,
@@ -37,8 +37,10 @@ export function SchemaFlow() {
     selectedEdge,
     setSelectedEdge,
     updateEdgeData,
-    duplicateColumns,
-  } = useSchemaFlow();
+    duplicateRows,
+    updateEnumTypeNameInRows,
+    updateEnumEdges,
+  }= useSchemaFlow();
 
   const {
     selectedNode,
@@ -50,6 +52,28 @@ export function SchemaFlow() {
     deleteNode
   } = useSchemaNodes();
 
+  // Add a force refresh counter to trigger React Flow re-renders
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  // Listen for color changes in nodes and force refresh
+  useEffect(() => {
+    const unsubscribe = useSchemaStore.subscribe(
+      (state) => {
+        // Check if any node's color has changed
+        const hasColorChange = state.schema.nodes.some(node => 
+          node.data?.color && node.style?.['--colorUpdateTimestamp']
+        );
+        
+        if (hasColorChange) {
+          // Force a re-render of ReactFlow
+          setRefreshKey(prev => prev + 1);
+        }
+      }
+    );
+    
+    return () => unsubscribe();
+  }, []);
+
   // Performance enhancement: Optimize panning and viewport for large diagrams
   const onInit = useCallback((reactFlowInstance: ViewportHelperFunctions) => {
     reactFlowInstance.fitView({
@@ -58,6 +82,51 @@ export function SchemaFlow() {
       minZoom: 0.5,
     });
   }, []);
+
+  // Performance enhancement: Use a memoization for the ReactFlow content
+  const MemoizedReactFlow = useMemo(() => {
+    return (
+      <ReactFlow
+        key={`reactflow-${refreshKey}`} // Force complete re-render on color changes
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodesDelete={onNodeDelete}
+        onEdgeClick={onEdgeClick}
+        nodeTypes={nodeTypes}
+        onInit={onInit}
+        fitView
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        className="bg-muted/30"
+        style={{ width: '100%', height: '100%' }}
+        connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        connectionLineType="smoothstep"
+        snapToGrid={true}
+        snapGrid={[15, 15]}
+        defaultEdgeOptions={{
+          type: 'smoothstep',
+          animated: true,
+        }}
+        // Performance settings
+        nodesDraggable={true}
+        nodesConnectable={true}
+        elementsSelectable={true}
+        minZoom={0.1}
+        maxZoom={2.5}
+        nodeExtent={[
+          [-2000, -2000],
+          [4000, 4000]
+        ]}
+      >
+        <FlowControls />
+      </ReactFlow>
+    );
+  }, [nodes, edges, onNodesChange, onEdgesChange, onConnect, onNodeClick, onNodeDelete, 
+      onEdgeClick, onInit, onDragOver, onDrop, refreshKey]); // Add refreshKey dependency
 
   // Render the appropriate sidebar content based on the active tab
   const renderSidebar = () => {
@@ -74,15 +143,22 @@ export function SchemaFlow() {
             onDeleteNode={(node) => {
               deleteNode(node);
             }}
-            duplicateColumns={duplicateColumns[selectedNode?.data?.label]}
-            nodes={selectedNode ? nodes : []} // Performance: Only pass all nodes when needed
+            duplicateRows={selectedNode?.data?.label ? duplicateRows[selectedNode.data.label] : undefined}
+            nodes={nodes} // Always pass all nodes, not just when a node is selected
             onNodeSelect={(node) => onNodeClick({} as React.MouseEvent, node)}
           />
         );
       case "sql":
         return <SqlEditor />;
       case "ai":
-        return <AiAssistant />;
+        return <AiAssistant 
+          nodes={nodes} 
+          edges={edges} 
+          onApplySuggestion={(suggestedNodes, suggestedEdges) => {
+            // Implement your logic to apply suggestions here.
+            console.log("Apply suggestion", suggestedNodes, suggestedEdges);
+          }}
+        />;
       default:
         return null;
     }
@@ -102,43 +178,7 @@ export function SchemaFlow() {
         {renderSidebar()}
         
         <div className="flex-1 h-full">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onNodesDelete={onNodeDelete}
-            onEdgeClick={onEdgeClick}
-            nodeTypes={nodeTypes}
-            onInit={onInit}
-            fitView
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            className="bg-muted/30"
-            style={{ width: '100%', height: '100%' }}
-            connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
-            connectionLineType="smoothstep"
-            snapToGrid={true}
-            snapGrid={[15, 15]}
-            defaultEdgeOptions={{
-              type: 'smoothstep',
-              animated: true,
-            }}
-            // Performance settings
-            nodesDraggable={true}
-            nodesConnectable={true}
-            elementsSelectable={true}
-            minZoom={0.1}
-            maxZoom={2.5}
-            nodeExtent={[
-              [-2000, -2000],
-              [4000, 4000]
-            ]}
-          >
-            <FlowControls />
-          </ReactFlow>
+          {MemoizedReactFlow}
         </div>
         
         {activeTab === "visual" && selectedEdge && (

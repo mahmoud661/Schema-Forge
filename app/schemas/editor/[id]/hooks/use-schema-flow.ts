@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { debounce } from "lodash"; // You'll need to install lodash if not already
 
 interface DuplicateColumnInfo {
-  [columnName: string]: {
+  [rowName: string]: {
     isDuplicate: boolean;
     tables: string[];
   };
@@ -25,9 +25,9 @@ export function useSchemaFlow() {
     setSelectedEdge,
     setSelectedNode,
     onConnect: storeOnConnect,
-    setDuplicateColumns,
+    setDuplicateRows,
   } = useSchemaStore();
-  const { nodes, edges, selectedEdge, activeTab, duplicateColumns } = schema;
+  const { nodes, edges, selectedEdge, activeTab, duplicateRows } = schema;
   
   const reactFlowInstance = useReactFlow();
   // Use a reference to avoid recreating functions
@@ -43,31 +43,31 @@ export function useSchemaFlow() {
     }
   }, [params.id]);
 
-  // Performance optimization: Debounce duplicate column detection
+  // Performance optimization: Debounce duplicate row detection
   const debouncedDuplicateCheck = useCallback(
     debounce((nodes) => {
-      const columnMap: Record<string, string[]> = {};
-      const newDuplicateColumns: Record<string, any> = {};
+      const rowMap: Record<string, string[]> = {};
+      const newDuplicateRows: Record<string, any> = {};
 
       // Only check database schema nodes
       nodes.forEach((node) => {
         if (node.data?.schema && Array.isArray(node.data.schema)) {
           node.data.schema.forEach((row) => {
-            if (!columnMap[row.title]) {
-              columnMap[row.title] = [];
+            if (!rowMap[row.title]) {
+              rowMap[row.title] = [];
             }
-            columnMap[row.title].push(node.data.label);
+            rowMap[row.title].push(node.data.label);
           });
         }
       });
 
-      Object.entries(columnMap).forEach(([columnName, tables]) => {
+      Object.entries(rowMap).forEach(([rowName, tables]) => {
         if (tables.length > 1) {
           tables.forEach((tableName) => {
-            if (!newDuplicateColumns[tableName]) {
-              newDuplicateColumns[tableName] = {};
+            if (!newDuplicateRows[tableName]) {
+              newDuplicateRows[tableName] = {};
             }
-            newDuplicateColumns[tableName][columnName] = {
+            newDuplicateRows[tableName][rowName] = {
               isDuplicate: true,
               tables: tables.filter(t => t !== tableName)
             };
@@ -75,9 +75,10 @@ export function useSchemaFlow() {
         }
       });
 
-      setDuplicateColumns(newDuplicateColumns);
+      // Always initialize with an object, never undefined
+      setDuplicateRows(newDuplicateRows || {});
     }, 300), // 300ms debounce
-    [setDuplicateColumns]
+    [setDuplicateRows]
   );
 
   // Check for duplicate row names across all tables - now using debounced function
@@ -106,15 +107,15 @@ export function useSchemaFlow() {
           params.targetHandle?.startsWith('target-')) {
         
         // Extract the row name from the target handle
-        const columnName = params.targetHandle.substring('target-'.length);
+        const rowName = params.targetHandle.substring('target-'.length);
         const enumName = sourceNode.data.name;
         
         // Find the row index
-        const columnIndex = targetNode.data.schema.findIndex(
-          (col: any) => col.title === columnName
+        const rowIndex = targetNode.data.schema.findIndex(
+          (row: any) => row.title === rowName
         );
         
-        if (columnIndex !== -1) {
+        if (rowIndex !== -1) {
           // Check if there's an existing enum connection we need to remove
           const existingEnumEdges = edges.filter(edge => 
             edge.target === targetNode.id && 
@@ -122,7 +123,7 @@ export function useSchemaFlow() {
             edge.data?.connectionType === 'enum'
           );
           
-          // Remove existing enum connections to this column
+          // Remove existing enum connections to this row
           if (existingEnumEdges.length > 0) {
             const filteredEdges = edges.filter(edge => !existingEnumEdges.includes(edge));
             updateEdges(filteredEdges);
@@ -132,8 +133,8 @@ export function useSchemaFlow() {
           const updatedNodes = nodes.map(node => {
             if (node.id === targetNode.id) {
               const updatedSchema = [...node.data.schema];
-              updatedSchema[columnIndex] = {
-                ...updatedSchema[columnIndex],
+              updatedSchema[rowIndex] = {
+                ...updatedSchema[rowIndex],
                 type: `enum_${enumName}`
               };
               
@@ -153,7 +154,7 @@ export function useSchemaFlow() {
           
           // Create the edge connection with proper enum styling
           const newEdge = {
-            id: `e-enum-${params.source}-${params.target}-${columnName}`,
+            id: `e-enum-${params.source}-${params.target}-${rowName}`,
             source: params.source,
             target: params.target,
             sourceHandle: params.sourceHandle,
@@ -166,7 +167,7 @@ export function useSchemaFlow() {
           };
           
           updateEdges([...edges.filter(e => !existingEnumEdges.includes(e)), newEdge]);
-          toast.success(`Applied ENUM type "${enumName}" to column "${columnName}"`);
+          toast.success(`Applied ENUM type "${enumName}" to row "${rowName}"`);
           return; // Exit early, we've handled this connection
         }
       }
@@ -184,7 +185,7 @@ export function useSchemaFlow() {
             title: `${sourceNode.data.label.toLowerCase()}_id`,
             type: "uuid",
             constraints: ["notnull"],
-            id: `col-${Date.now()}-${Math.random()}`
+            id: `row-${Date.now()}-${Math.random()}`
           };
           
           // Update the target node with the new row
@@ -219,7 +220,7 @@ export function useSchemaFlow() {
         }
       } else {
         // Handle normal row-to-row connections
-        // Check if this is trying to connect to a column that already has an enum connection
+        // Check if this is trying to connect to a row that already has an enum connection
         const existingEnumEdge = edges.find(edge => 
           edge.target === params.target && 
           edge.targetHandle === params.targetHandle &&
@@ -227,7 +228,7 @@ export function useSchemaFlow() {
         );
         
         if (existingEnumEdge) {
-          toast.warning("This column is already connected to an ENUM type. Please disconnect it first.");
+          toast.warning("This row is already connected to an ENUM type. Please disconnect it first.");
           return;
         }
         
@@ -274,8 +275,8 @@ export function useSchemaFlow() {
           let isUsed = false;
           nodes.forEach(node => {
             if ((node.type === 'databaseSchema' || !node.type) && node.data?.schema) {
-              node.data.schema.forEach((col: any) => {
-                if (col.type === `enum_${enumName}`) {
+              node.data.schema.forEach((row: any) => {
+                if (row.type === `enum_${enumName}`) {
                   isUsed = true;
                 }
               });
@@ -283,7 +284,7 @@ export function useSchemaFlow() {
           });
           
           if (isUsed) {
-            toast.error(`Cannot delete: ENUM type "${enumName}" is used by one or more columns`);
+            toast.error(`Cannot delete: ENUM type "${enumName}" is used by one or more rows`);
             // Skip this node, don't delete it
             continue;
           }
@@ -310,8 +311,8 @@ export function useSchemaFlow() {
         let isUsed = false;
         nodes.forEach(n => {
           if ((n.type === 'databaseSchema' || !n.type) && n.data?.schema) {
-            n.data.schema.forEach((col: any) => {
-              if (col.type === `enum_${enumName}`) {
+            n.data.schema.forEach((row: any) => {
+              if (row.type === `enum_${enumName}`) {
                 isUsed = true;
               }
             });
@@ -361,27 +362,27 @@ export function useSchemaFlow() {
     ));
   }, [edges, updateEdges]);
 
-  // Add a utility function to update ENUM type names in any columns using them
-  const updateEnumTypeNameInColumns = useCallback((oldName: string, newName: string) => {
+  // Add a utility function to update ENUM type names in any rows using them
+  const updateEnumTypeNameInRows = useCallback((oldName: string, newName: string) => {
     if (oldName === newName) return false;
     
     const updatedNodes = nodes.map(node => {
       // Only process database schema nodes
       if (node.type === 'databaseSchema' || !node.type) {
-        const needsUpdate = node.data.schema?.some((col: any) => 
-          col.type === `enum_${oldName}`
+        const needsUpdate = node.data.schema?.some((row: any) => 
+          row.type === `enum_${oldName}`
         );
         
         if (needsUpdate) {
           // Update the row types to use the new enum name
-          const updatedSchema = node.data.schema.map((col: any) => {
-            if (col.type === `enum_${oldName}`) {
+          const updatedSchema = node.data.schema.map((row: any) => {
+            if (row.type === `enum_${oldName}`) {
               return {
-                ...col,
+                ...row,
                 type: `enum_${newName}`
               };
             }
-            return col;
+            return row;
           });
           
           return {
@@ -438,8 +439,8 @@ export function useSchemaFlow() {
     selectedEdge,
     setSelectedEdge,
     updateEdgeData,
-    duplicateColumns,
-    updateEnumTypeNameInColumns,
+    duplicateRows,
+    updateEnumTypeNameInRows,
     updateEnumEdges,
   };
 }

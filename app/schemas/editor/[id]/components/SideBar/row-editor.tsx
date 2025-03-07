@@ -14,12 +14,12 @@ interface ColumnData {
 }
 
 interface ColumnEditorProps {
-  columns: ColumnData[];
+  rows: ColumnData[];
   onAddColumn: () => void;
   onUpdateColumn: (index: number, field: string, value: any) => void;
   onRemoveColumn: (index: number) => void;
   onToggleConstraint: (index: number, constraint: string) => void;
-  duplicateColumns?: Record<string, { isDuplicate: boolean; tables: string[] }>;
+  duplicateRows?: Record<string, { isDuplicate: boolean; tables: string[] }>;
   dataTypes: {
     id: string;
     label: string;
@@ -34,12 +34,12 @@ interface ColumnEditorProps {
 }
 
 export const ColumnEditor: React.FC<ColumnEditorProps> = ({
-  columns,
+  rows,
   onAddColumn,
   onUpdateColumn,
   onRemoveColumn,
   onToggleConstraint,
-  duplicateColumns,
+  duplicateRows,
   dataTypes,
   constraints,
   enumTypes = [],
@@ -56,7 +56,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-medium text-sm flex items-center gap-1.5">
           <Hash className="h-3.5 w-3.5" />
-          Columns
+          Rows
         </h4>
         <Button onClick={onAddColumn} size="sm" variant="outline" className="h-7 text-xs">
           <Plus className="h-3.5 w-3.5 mr-1" />
@@ -65,14 +65,14 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
       </div>
 
       <div className="space-y-3">
-        {columns.map((row, index) => {
-          const columnKey = row.id || `row-${index}`;
-          const isDuplicate = duplicateColumns?.[row.title]?.isDuplicate;
+        {rows.map((row, index) => {
+          const rowKey = row.id || `row-${index}`;
+          const isDuplicate = duplicateRows?.[row.title]?.isDuplicate;
           const enumName = getEnumNameFromType(row.type);
           
           return (
             <div 
-              key={columnKey} 
+              key={rowKey} 
               className={cn(
                 "space-y-2 p-3 border rounded-lg transition-all",
                 isDuplicate 
@@ -87,7 +87,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                   <span className="text-yellow-800 dark:text-yellow-300">
                     Duplicate row name in:{' '}
                     <strong>
-                      {duplicateColumns[row.title].tables.join(', ')}
+                      {duplicateRows[row.title].tables.join(', ')}
                     </strong>
                   </span>
                 </div>
@@ -243,7 +243,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
               <div className="flex flex-wrap gap-2 pt-1">
                 {constraints.map((constraint) => (
                   <div 
-                    key={`${columnKey}-${constraint.id}`} 
+                    key={`${rowKey}-${constraint.id}`} 
                     className={cn(
                       "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border",
                       (row.constraints || []).includes(constraint.id) 
@@ -257,7 +257,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                       <Check className="h-3 w-3" />
                     ) : null}
                     <Label 
-                      htmlFor={`${columnKey}-${constraint.id}`} 
+                      htmlFor={`${rowKey}-${constraint.id}`} 
                       className="text-xs cursor-pointer"
                     >
                       {constraint.label}

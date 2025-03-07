@@ -83,9 +83,9 @@ export function AiAssistant({ nodes, edges, onApplySuggestion }: AiAssistantProp
         data: {
           label: tableName,
           schema: [
-            { title: "id", type: "uuid", constraints: ["primary", "notnull"], id: `col-${Date.now()}-1` },
-            { title: "created_at", type: "timestamp", constraints: ["notnull"], id: `col-${Date.now()}-2` },
-            { title: "updated_at", type: "timestamp", constraints: ["notnull"], id: `col-${Date.now()}-3` },
+            { title: "id", type: "uuid", constraints: ["primary", "notnull"], id: `row-${Date.now()}-1` },
+            { title: "created_at", type: "timestamp", constraints: ["notnull"], id: `row-${Date.now()}-2` },
+            { title: "updated_at", type: "timestamp", constraints: ["notnull"], id: `row-${Date.now()}-3` },
           ]
         }
       };
@@ -93,20 +93,20 @@ export function AiAssistant({ nodes, edges, onApplySuggestion }: AiAssistantProp
       // Add specific fields based on table type
       if (tableName === 'Users') {
         newNode.data.schema.push(
-          { title: "email", type: "varchar", constraints: ["unique", "notnull"], id: `col-${Date.now()}-4` },
-          { title: "password_hash", type: "varchar", constraints: ["notnull"], id: `col-${Date.now()}-5` }
+          { title: "email", type: "varchar", constraints: ["unique", "notnull"], id: `row-${Date.now()}-4` },
+          { title: "password_hash", type: "varchar", constraints: ["notnull"], id: `row-${Date.now()}-5` }
         );
       } else if (tableName === 'Products') {
         newNode.data.schema.push(
-          { title: "name", type: "varchar", constraints: ["notnull"], id: `col-${Date.now()}-4` },
-          { title: "price", type: "money", constraints: ["notnull"], id: `col-${Date.now()}-5` },
-          { title: "description", type: "text", id: `col-${Date.now()}-6` }
+          { title: "name", type: "varchar", constraints: ["notnull"], id: `row-${Date.now()}-4` },
+          { title: "price", type: "money", constraints: ["notnull"], id: `row-${Date.now()}-5` },
+          { title: "description", type: "text", id: `row-${Date.now()}-6` }
         );
       } else if (tableName === 'Orders') {
         newNode.data.schema.push(
-          { title: "user_id", type: "uuid", constraints: ["notnull"], id: `col-${Date.now()}-4` },
-          { title: "total_amount", type: "money", constraints: ["notnull"], id: `col-${Date.now()}-5` },
-          { title: "status", type: "varchar", constraints: ["notnull"], id: `col-${Date.now()}-6` }
+          { title: "user_id", type: "uuid", constraints: ["notnull"], id: `row-${Date.now()}-4` },
+          { title: "total_amount", type: "money", constraints: ["notnull"], id: `row-${Date.now()}-5` },
+          { title: "status", type: "varchar", constraints: ["notnull"], id: `row-${Date.now()}-6` }
         );
       }
       
@@ -169,7 +169,7 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
     else if (lowerPrompt.includes('optimize') || lowerPrompt.includes('improve')) {
       // Suggest adding indexes to tables
       const optimizedNodes = currentNodes.map(node => {
-        // Find string columns that might benefit from indexes
+        // Find string rows that might benefit from indexes
         const updatedSchema = node.data.schema.map(row => {
           if ((row.type === 'varchar' || row.type === 'text') && 
               !row.constraints?.includes('index') && 
@@ -203,7 +203,7 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
       
       return {
         role: 'assistant',
-        content: 'I\'ve analyzed your schema and added indexes to columns that might benefit from them for better query performance.',
+        content: 'I\'ve analyzed your schema and added indexes to rows that might benefit from them for better query performance.',
         suggestion: {
           nodes: optimizedNodes,
           edges: currentEdges,

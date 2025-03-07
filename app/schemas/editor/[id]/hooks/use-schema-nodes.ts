@@ -173,15 +173,15 @@ export function useSchemaNodes() {
     // Handle enum type deletion
     if (node.type === 'enumType') {
       // First check if this enum is used by any tables
-      const usedByColumns: { table: string; column: string }[] = [];
+      const usedByRows: { table: string; row: string }[] = [];
       
       schema.nodes.forEach(tableNode => {
         if ((tableNode.type === 'databaseSchema' || !tableNode.type) && tableNode.data.schema) {
-          tableNode.data.schema.forEach((col: any) => {
-            if (col.type === `enum_${node.data.name}`) {
-              usedByColumns.push({
+          tableNode.data.schema.forEach((row: any) => {
+            if (row.type === `enum_${node.data.name}`) {
+              usedByRows.push({
                 table: tableNode.data.label,
-                column: col.title
+                row: row.title
               });
             }
           });
@@ -189,8 +189,8 @@ export function useSchemaNodes() {
       });
       
       // If enum is in use, don't delete
-      if (usedByColumns.length > 0) {
-        toast.error(`Cannot delete: This ENUM is used by ${usedByColumns.length} column(s)`);
+      if (usedByRows.length > 0) {
+        toast.error(`Cannot delete: This ENUM is used by ${usedByRows.length} row(s)`);
         return false;
       }
       
