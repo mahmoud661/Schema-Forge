@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Hash, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Key, Fingerprint, AlertCircle, ListFilter, Trash2, Plus, AlertTriangle , Hash } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ColumnData {
   id: string;
@@ -50,6 +51,30 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
   
   // Helper to extract enum name from type
   const getEnumNameFromType = (type: string) => isEnumType(type) ? type.replace('enum_', '') : null;
+
+  // Constraint icon and tooltip mapping
+  const constraintConfig = {
+    primary: { 
+      icon: Key, 
+      description: "Uniquely identifies each record in the table",
+      activeClass: "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
+    },
+    unique: { 
+      icon: Fingerprint, 
+      description: "Ensures all values in the column are different",
+      activeClass: "bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300"
+    },
+    notnull: { 
+      icon: AlertCircle, 
+      description: "Ensures the column cannot contain NULL values",
+      activeClass: "bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300"
+    },
+    index: { 
+      icon: ListFilter, 
+      description: "Creates an index on the column for faster queries",
+      activeClass: "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300"
+    },
+  };
 
   return (
     <div>
@@ -240,30 +265,47 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                 </Button>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                {constraints.map((constraint) => (
-                  <div 
-                    key={`${rowKey}-${constraint.id}`} 
-                    className={cn(
-                      "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border",
-                      (row.constraints || []).includes(constraint.id) 
-                        ? "bg-primary/10 border-primary/30 text-primary-foreground dark:bg-primary/20" 
-                        : "bg-muted/50 border-transparent text-muted-foreground"
-                    )}
-                    onClick={() => onToggleConstraint(index, constraint.id)}
-                    role="button"
-                  >
-                    {(row.constraints || []).includes(constraint.id) ? (
-                      <Check className="h-3 w-3" />
-                    ) : null}
-                    <Label 
-                      htmlFor={`${rowKey}-${constraint.id}`} 
-                      className="text-xs cursor-pointer"
-                    >
-                      {constraint.label}
-                    </Label>
-                  </div>
-                ))}
+              {/* Enhanced Constraint Toggles */}
+              <div className="flex flex-wrap gap-1.5 pt-2">
+                {constraints.map((constraint) => {
+                  const isActive = (row.constraints || []).includes(constraint.id);
+                  const config = constraintConfig[constraint.id as keyof typeof constraintConfig];
+                  const ConstraintIcon = config?.icon || AlertCircle;
+                  
+                  // Skip rendering for enum types that can't be primary keys
+                  if (constraint.id === 'primary' && row.type.startsWith('enum_')) {
+                    return null;
+                  }
+                  
+                  return (
+                    <TooltipProvider key={`${rowKey}-${constraint.id}`}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className={cn(
+                              "flex items-center gap-1 py-1 px-2 text-xs border rounded-md transition-all",
+                              isActive 
+                                ? config?.activeClass || "bg-primary/10 border-primary/30 text-primary"
+                                : "bg-background hover:bg-muted/50 border-muted/50 text-muted-foreground hover:text-foreground",
+                              "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            )}
+                            onClick={() => onToggleConstraint(index, constraint.id)}
+                            type="button"
+                          >
+                            <ConstraintIcon className="h-3 w-3" />
+                            <span className="font-medium">{constraint.label}</span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs">
+                          <p className="text-sm font-medium">{constraint.label}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {config?.description || `Adds a ${constraint.label} constraint to this column`}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
               </div>
             </div>
           );
