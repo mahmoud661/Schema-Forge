@@ -199,76 +199,78 @@ export function SqlEditor() {
         const originalSql = sql;
         const fixedSql = fixCommonSqlIssues(sql);
         if (fixedSql !== originalSql) {
-          console.log("SQL was modified by auto-fix");
-          toast.info("Some SQL syntax issues were automatically fixed");
-          setEditableSql(fixedSql);
           processedSql = fixedSql;
+          console.log("Fixed SQL syntax:", fixedSql);
         }
       }
       
       const validation = validateSqlSyntax(processedSql);
       if (!validation.isValid) {
-        // Only treat true errors (not warnings) as critical
-        const criticalErrors = validation.errors.filter(err => 
-          !err.startsWith('Warning:') && (
-            err.includes("cannot be empty") || 
-            err.includes("must contain at least one CREATE TABLE")
-          )
-        );
-        
-        if (criticalErrors.length > 0) {
-          setError(criticalErrors[0]);
-          return;
-        } else if (!isLiveUpdate && validation.errors.length > 0) {
-          // Log warnings but don't block execution
-          const warnings = validation.errors.filter(err => err.startsWith('Warning:'));
-          if (warnings.length > 0) {
-            console.warn("SQL warnings:", warnings);
-          }
+        setError(`SQL validation failed: ${validation.errors.join(", ")}`);
+        if (!isLiveUpdate) {
+          toast.warning("SQL has issues that may prevent proper parsing");
         }
       }
       
       try {
+        console.log("Parsing SQL:", processedSql);
         const parsedSchema = parseSqlToSchema(processedSql);
+        
         if (parsedSchema) {
-          console.log("Parsed schema:", { 
-            tables: parsedSchema.nodes.filter(n => n.type !== 'enumType').map(n => n.data.label),
-            enums: parsedSchema.nodes.filter(n => n.type === 'enumType').map(n => n.data.name),
-            edges: parsedSchema.edges.length,
-            enumTypes: parsedSchema.enumTypes?.length || 0,
-            edgeDetails: parsedSchema.edges.map(e => ({
-              source: e.source,
-              target: e.target,
-              sourceHandle: e.sourceHandle,
-              targetHandle: e.targetHandle,
-              connectionType: e.data?.connectionType
-            })),
-            sql: processedSql 
+          // Log details about what was parsed
+          console.log("Successfully parsed schema:", parsedSchema.nodes.map(n => n.data?.label));
+          console.log("Parsed edges:", parsedSchema.edges.map(e => `${e.source}(${e.sourceHandle}) -> ${e.target}(${e.targetHandle})`));
+          
+          // Preserve node positions
+          const preservedNodes = parsedSchema.nodes.map(newNode => {
+            const existingNode = schema.nodes.find(n => 
+              (n.data?.label === newNode.data?.label) || 
+              (n.id === newNode.id)
+            );
+            
+            if (existingNode && existingNode.position) {
+              return {
+                ...newNode,
+                position: existingNode.position,
+                style: existingNode.style,
+                data: {
+                  ...newNode.data,
+                  color: existingNode.data?.color || newNode.data?.color
+                }
+              };
+            }
+            
+            return newNode;
           });
           
-          // Make sure we update BOTH the nodes AND enumTypes in our schema
+          // Always use the edges directly from the parser
+          // This is critical for preserving relationships
+          const edges = parsedSchema.edges;
+          
+          console.log(`Applying schema with ${preservedNodes.length} nodes and ${edges.length} edges`);
+          
+          // Update the schema with preserved nodes and edges
           handleUpdateSchema(
-            parsedSchema.nodes, 
-            parsedSchema.edges, 
+            preservedNodes,
+            edges,
             parsedSchema.enumTypes || []
           );
           
-          // Update SQL stored in state
-          updateCode(processedSql);
+          // Set the applied SQL for next comparison
+          setAppliedSql(processedSql);
           
           if (!isLiveUpdate) {
-            // Save the user's SQL exactly as applied
-            setAppliedSql(processedSql);
-            setSqlContent(processedSql);
-            setIsEditing(false);
-            
-            const enumCount = parsedSchema.nodes.filter(n => n.type === 'enumType').length;
-            const tableCount = parsedSchema.nodes.filter(n => n.type === 'databaseSchema' || !n.type).length;
+            const tablesCount = parsedSchema.nodes.filter(n => n.type !== 'enumType').length;
+            const enumsCount = parsedSchema.nodes.filter(n => n.type === 'enumType').length;
+            const edgesCount = parsedSchema.edges.length;
             
             toast.success(
-              `Schema updated successfully (${tableCount} tables, ${parsedSchema.edges.length} relationships, ${enumCount} enum types)`
+              `Schema updated with ${tablesCount} tables, ${enumsCount} enums, and ${edgesCount} relationships`
             );
           }
+          
+          // Exit editing mode
+          setIsEditing(false);
         }
       } catch (parseError: any) {
         console.error("SQL parsing error:", parseError);
