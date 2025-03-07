@@ -90,7 +90,20 @@ export function SchemaFlow() {
     // Then update the store normally
     updateNodeData(nodeId, { color });
   }, []);
-  
+
+  // Update the direct DOM manipulation function to only update border
+  const handleBorderColorUpdate = useCallback((nodeId, color) => {
+    // Find the node element in ReactFlow
+    const nodeElement = document.querySelector(`[data-id="${nodeId}"] .node-header`);
+    if (nodeElement) {
+      // Directly update only the border style for instant feedback
+      nodeElement.style.borderBottom = `3px solid ${color.border}`;
+    }
+    
+    // Then update the store normally
+    updateNodeData(nodeId, { color });
+  }, [updateNodeData]);
+
   // Expose the fast color update handler to child components
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -105,6 +118,21 @@ export function SchemaFlow() {
       }
     };
   }, [handleColorUpdate]);
+
+  // Expose the border color update handler to child components
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // @ts-ignore - This is an intentional global for optimization
+      window.__schemaColorUpdater = handleBorderColorUpdate;
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        // @ts-ignore
+        delete window.__schemaColorUpdater;
+      }
+    };
+  }, [handleBorderColorUpdate]);
 
   // Performance enhancement: Optimize panning and viewport for large diagrams
   const onInit = useCallback((reactFlowInstance: ViewportHelperFunctions) => {

@@ -52,34 +52,18 @@ const SchemaNode = memo(
     const isDarkMode = resolvedTheme === 'dark';
     const nodeRef = useRef<HTMLDivElement>(null);
     
-    // Extract color values once and memoize to prevent recalculation
-    const { headerColor, headerBgColor, nodeStyle } = useMemo(() => {
-      // If color is stored in the node data, use it
-      if (data.color) {
-        const headerColor = data.color.border;
-        const headerBgColor = isDarkMode ? data.color.dark : data.color.light;
-        const nodeStyle = {
-          backgroundColor: headerBgColor,
-          borderBottom: `2px solid ${headerColor}`
-        };
-        return { headerColor, headerBgColor, nodeStyle };
-      }
+    // Extract only border color from node data - simplified approach
+    const { borderColor, nodeStyle } = useMemo(() => {
+      // Get the border color from node data or use default
+      const borderColor = data.color?.border || '#38bdf8';
       
-      // Fallback for legacy nodes without stored color
-      const colorIndex = Math.abs(
-        data.id?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) || 0
-      ) % TABLE_COLORS.length;
-      
-      const colorSet = TABLE_COLORS[colorIndex];
-      const headerColor = colorSet.border;
-      const headerBgColor = isDarkMode ? colorSet.dark : colorSet.light;
+      // Apply only border styling, no background
       const nodeStyle = {
-        backgroundColor: headerBgColor,
-        borderBottom: `2px solid ${headerColor}`
+        borderBottom: `3px solid ${borderColor}`
       };
       
-      return { headerColor, headerBgColor, nodeStyle };
-    }, [data.color, data.id, isDarkMode]);
+      return { borderColor, nodeStyle };
+    }, [data.color]);
 
     // Direct DOM update for color changes - very performant
     useEffect(() => {
@@ -87,14 +71,11 @@ const SchemaNode = memo(
         // Find the header element
         const header = nodeRef.current.querySelector('.node-header');
         if (header && data.color) {
-          // Apply styles directly to the DOM for instant update
-          header.setAttribute('style', `
-            background-color: ${isDarkMode ? data.color.dark : data.color.light};
-            border-bottom: 2px solid ${data.color.border};
-          `);
+          // Apply only border style for instant update
+          header.style.borderBottom = `3px solid ${data.color.border}`;
         }
       }
-    }, [data._colorUpdated, isDarkMode, mounted]);
+    }, [data._colorUpdated, mounted]);
 
     useEffect(() => {
       setMounted(true);
@@ -222,8 +203,7 @@ const SchemaNode = memo(
           <DatabaseSchemaNodeHeader>
             <div className="w-full rounded-t-md py-2 px-3 font-medium bg-muted/20"
                 style={{ 
-                  backgroundColor: headerBgColor,
-                  borderBottom: `2px solid ${headerColor}` 
+                  borderBottom: `3px solid ${borderColor}` 
                 }}>
               {data.label}
             </div>
@@ -244,7 +224,7 @@ const SchemaNode = memo(
       >
         <DatabaseSchemaNodeHeader>
           <div 
-            className="w-full rounded-t-md py-2 px-3 font-medium node-header"
+            className="w-full rounded-t-md py-2 px-3 font-medium node-header bg-card"
             style={nodeStyle}
           >
             {data.label}

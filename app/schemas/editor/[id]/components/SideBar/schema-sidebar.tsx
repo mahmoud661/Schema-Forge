@@ -28,6 +28,7 @@ import { useTableOperations } from "@/hooks/use-table-operations";
 import { useEnumOperations } from "@/hooks/use-enum-operations";
 import { toast } from "sonner";
 import { useCallback } from "react";
+import { generateColorVariants } from "@/lib/color-utils";
 
 interface SidebarProps {
   selectedNode: SchemaNode | EnumTypeNode | null;
@@ -160,22 +161,47 @@ export function Sidebar({
   }, [updateNodeData, onUpdateNode]);
 
   // Fast Color Update function
-  const handleFastColorChange = useCallback((nodeId: string, tableColor: any, colorType: 'light' | 'dark' | 'border', color: string) => {
-    // Update the color in the component
-    const newColor = { ...tableColor, [colorType]: color };
+  const handleFastColorChange = useCallback((nodeId: string, color: string) => {
+    // Generate light/dark variants from the selected color
+    const colorVariants = generateColorVariants(color);
     
     // Use the super-fast direct DOM updater if available
     if (typeof window !== 'undefined' && window.__schemaColorUpdater) {
       // @ts-ignore - Using our global handler for performance
-      window.__schemaColorUpdater(nodeId, newColor);
+      window.__schemaColorUpdater(nodeId, colorVariants);
     } else {
       // Fall back to standard update
-      updateNodeData(nodeId, { color: newColor });
+      updateNodeData(nodeId, { color: colorVariants });
     }
     
     // Also update via prop method for parent components
     onUpdateNode({
-      color: newColor
+      color: colorVariants
+    });
+  }, [updateNodeData, onUpdateNode]);
+
+  // Update the border color handler to only send the border color
+  const handleBorderColorChange = useCallback((nodeId: string, color: string) => {
+    // We only need to update the border color now
+    const colorData = {
+      border: color,
+      // Maintain compatibility with the existing code
+      light: 'transparent',
+      dark: 'transparent'
+    };
+    
+    // Use the super-fast direct DOM updater if available
+    if (typeof window !== 'undefined' && window.__schemaColorUpdater) {
+      // @ts-ignore - Using our global handler for performance
+      window.__schemaColorUpdater(nodeId, colorData);
+    } else {
+      // Fall back to standard update
+      updateNodeData(nodeId, { color: colorData });
+    }
+    
+    // Also update via prop method for parent components
+    onUpdateNode({
+      color: colorData
     });
   }, [updateNodeData, onUpdateNode]);
 
@@ -217,37 +243,25 @@ export function Sidebar({
               <AccordionTrigger className="py-1.5 px-0 text-xs font-medium text-muted-foreground hover:text-foreground hover:no-underline">
                 <div className="flex items-center gap-1.5">
                   <PaintBucket className="h-3.5 w-3.5" />
-                  Table Appearance
+                  Table Style
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pb-1 pt-2">
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <ColorPicker
-                      label="Light Mode"
-                      color={tableColor.light}
-                      onChange={(color) => handleFastColorChange(node.id, tableColor, 'light', color)}
-                    />
-                    <ColorPicker
-                      label="Dark Mode"
-                      color={tableColor.dark}
-                      onChange={(color) => handleFastColorChange(node.id, tableColor, 'dark', color)}
-                    />
-                  </div>
                   <ColorPicker
-                    label="Border Accent"
-                    color={tableColor.border}
-                    onChange={(color) => handleFastColorChange(node.id, tableColor, 'border', color)}
+                    label="Border:"
+                    color={node.data?.color?.border || '#38bdf8'}
+                    onChange={(color) => handleBorderColorChange(node.id, color)}
                   />
                   
                   {isTableColorCustomized && (
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="h-7 text-xs w-full"
+                      className="h-6 text-xs w-full"
                       onClick={() => handleResetColors(node.id)}
                     >
-                      Reset to Default Colors
+                      Reset to Default
                     </Button>
                   )}
                 </div>
