@@ -151,32 +151,6 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
     }
   });
   
-  // Add ALTER TABLE statements for foreign keys if not using inline constraints
-  if (!useInlineConstraints && foreignKeys.length > 0) {
-    sql += '\n\n-- Foreign Key Constraints';
-    foreignKeys.forEach((fk) => {
-      const constraintName = useCaseSensitive ? 
-        `"fk_${node.data.label.replace(/\s/g, '_')}_${fk.row.replace(/"/g, '').replace(/\s/g, '_')}"`
-        : `fk_${node.data.label.toLowerCase().replace(/\s/g, '_')}_${fk.row.replace(/"/g, '').toLowerCase().replace(/\s/g, '_')}`;
-      
-      const refTable = useCaseSensitive ? 
-        `"${fk.refTable.replace(/"/g, '""')}"` : fk.refTable;
-      const refColumn = useCaseSensitive ? 
-        `"${fk.refColumn.replace(/"/g, '""')}"` : fk.refColumn;
-      
-      sql += `\nALTER TABLE ${tableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${fk.row}) REFERENCES ${refTable}(${refColumn})`;
-      
-      if (fk.onDelete) {
-        sql += ` ON DELETE ${fk.onDelete}`;
-      }
-      if (fk.onUpdate) {
-        sql += ` ON UPDATE ${fk.onUpdate}`;
-      }
-      
-      sql += `;`;
-    });
-  }
-  
   return sql;
 };
 
@@ -287,7 +261,7 @@ export const generateSql = (
       };
     });
   }
-  
+
   // Then, generate all table creation statements
   schemaNodes.forEach(node => {
     // Only process database schema nodes, not enum nodes
@@ -329,7 +303,8 @@ export const generateSql = (
       sql += "\n\n";
     }
   });
-  
+  console.log("schemaNodeasdasdasds", sql);
+
   // Add ALTER TABLE statements for edges between tables - but only if NOT using inline constraints
   if (schemaEdges.length > 0 && !settings.useInlineConstraints) {
     const fkEdges = schemaEdges.filter(edge => {
@@ -341,7 +316,7 @@ export const generateSql = (
             (targetNode.type === "databaseSchema" || !targetNode.type) &&
             (!edge.data || edge.data.connectionType !== 'enum'); // Exclude enum connections
     });
-    
+    console.log("fkEdges", fkEdges);
     if (fkEdges.length > 0) {
       sql += "-- Foreign Key Constraints\n";
       fkEdges.forEach(edge => {
@@ -383,6 +358,6 @@ export const generateSql = (
       });
     }
   }
-  
+  console.log("sqksdnflkd", sql);
   return sql;
 };
