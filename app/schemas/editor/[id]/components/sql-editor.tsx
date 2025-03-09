@@ -69,12 +69,13 @@ export function SqlEditor() {
     }
   }, []);
   
-  // Regenerate SQL when db type or settings change
+  // Regenerate SQL when db type changes (but not other settings)
   useEffect(() => {
     const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
     setSqlContent(newSql);
     
     // Only update editable SQL if we're not currently editing
+    // This ensures we don't overwrite user-edited SQL
     if (!isEditing) {
       setEditableSql(newSql);
       setAppliedSql(newSql);
@@ -83,13 +84,35 @@ export function SqlEditor() {
       updateCode(newSql);
     }
     
-    // Log the settings change for debugging
-    console.log("SQL editor settings changed:", { 
-      dbType, 
-      useInlineConstraints: settings.useInlineConstraints,
-      caseSensitive: settings.caseSensitiveIdentifiers 
-    });
-  }, [dbType, settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
+    // Log the change for debugging
+    console.log("SQL editor db type changed:", dbType);
+  }, [dbType]); // Only react to database type changes
+  
+  // Modify the settings change effect to preserve user edits
+  useEffect(() => {
+    // Only update the SQL representation when not in editing mode
+    // or when explicitly requested (like when Apply is pressed)
+    if (!isEditing) {
+      // Regenerate SQL completely when settings change
+      const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
+      
+      // Update all state
+      setSqlContent(newSql);
+      setAppliedSql(newSql);
+      setEditableSql(newSql);
+      
+      // Also update store to maintain consistency
+      updateCode(newSql);
+      
+      // Log for debugging
+      console.log("Settings changed, regenerated SQL:", {
+        useInlineConstraints: settings.useInlineConstraints,
+        caseSensitive: settings.caseSensitiveIdentifiers
+      });
+    } else {
+      console.log("Settings changed but preserving user edits in editor");
+    }
+  }, [settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
   
   // Effect for live updates when SQL changes
   useEffect(() => {
@@ -125,10 +148,22 @@ export function SqlEditor() {
   }, [dbType, settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
 
   const handleToggleCaseSensitive = () => {
+    // First update the setting
     updateSettings({ 
       ...settings,
       caseSensitiveIdentifiers: !settings.caseSensitiveIdentifiers 
     });
+    
+    // If editing, prompt user to apply changes or warn that settings won't affect current edits
+    if (isEditing) {
+      toast.info("Apply your changes to see updates with new settings", {
+        description: "Current edits are preserved until you apply them",
+        action: {
+          label: "Apply Now",
+          onClick: () => handleApplySqlChanges()
+        }
+      });
+    }
   };
 
   // Handle toggling inline constraints with immediate SQL reparse
@@ -141,24 +176,16 @@ export function SqlEditor() {
       useInlineConstraints: !settings.useInlineConstraints
     });
     
-    // Force regen in the next tick to ensure setting is updated first
-    setTimeout(() => {
-      const updatedSettings = {
-        ...settings,
-        useInlineConstraints: !settings.useInlineConstraints
-      };
-      
-      const newSql = generateSql(dbType, nodes, edges, enumTypes, updatedSettings);
-      setSqlContent(newSql);
-      setAppliedSql(newSql);
-      
-      if (!isEditing) {
-        setEditableSql(newSql);
-        updateCode(newSql);
-      }
-      
-      console.log("Settings toggle complete, SQL regenerated");
-    }, 10);
+    // If editing, prompt user to apply changes or warn that settings won't affect current edits
+    if (isEditing) {
+      toast.info("Apply your changes to see updates with new settings", {
+        description: "Current edits are preserved until you apply them",
+        action: {
+          label: "Apply Now",
+          onClick: () => handleApplySqlChanges()
+        }
+      });
+    }
   };
 
   const handleDownload = () => {
@@ -197,45 +224,55 @@ export function SqlEditor() {
       let processedSql = sql;
       if (!isLiveUpdate) {
         const originalSql = sql;
-        const fixedSql = fixCommonSqlIssues(sql);
-        if (fixedSql !== originalSql) {
+        
+        // NEW: Fix table names with spaces by adding quotes if they're missing
+        processedSql = ensureTableNamesAreQuoted(processedSql);
+        
+        // Regular SQL fixes
+        const fixedSql = fixCommonSqlIssues(processedSql);
+        if (fixedSql !== processedSql) {
           processedSql = fixedSql;
           console.log("Fixed SQL syntax:", fixedSql);
         }
-      }
-      
-      const validation = validateSqlSyntax(processedSql);
-      if (!validation.isValid) {
-        setError(`SQL validation failed: ${validation.errors.join(", ")}`);
-        if (!isLiveUpdate) {
-          toast.warning("SQL has issues that may prevent proper parsing");
-        }
+        
+        // Remove duplicate ALTER TABLE statements
+        processedSql = removeDuplicateAlterTableStatements(processedSql);
+        console.log("After removing duplicate ALTER TABLE statements:", 
+          processedSql.includes("ALTER TABLE") ? 
+            `Contains ${(processedSql.match(/ALTER TABLE/g) || []).length} ALTER TABLE statements` : 
+            "No ALTER TABLE statements");
       }
       
       try {
+        // Log SQL before parsing to help debug issues
         console.log("Parsing SQL:", processedSql);
         const parsedSchema = parseSqlToSchema(processedSql);
         
         if (parsedSchema) {
-          // Log details about what was parsed
           console.log("Successfully parsed schema:", parsedSchema.nodes.map(n => n.data?.label));
-          console.log("Parsed edges:", parsedSchema.edges.map(e => `${e.source}(${e.sourceHandle}) -> ${e.target}(${e.targetHandle})`));
           
           // Preserve node positions
           const preservedNodes = parsedSchema.nodes.map(newNode => {
-            const existingNode = schema.nodes.find(n => 
-              (n.data?.label === newNode.data?.label) || 
-              (n.id === newNode.id)
-            );
+            // Look up the existing node, first try by ID
+            const existingNode = schema.nodes.find(n => n.id === newNode.id);
             
-            if (existingNode && existingNode.position) {
+            // If not found by ID, try by label with case-insensitive matching
+            const existingNodeByLabel = !existingNode ? schema.nodes.find(n => 
+              n.data?.label && newNode.data?.label && 
+              n.data.label.toLowerCase() === newNode.data.label.toLowerCase()
+            ) : null;
+            
+            // Use whichever node we found
+            const nodeToPreserve = existingNode || existingNodeByLabel;
+            
+            if (nodeToPreserve && nodeToPreserve.position) {
               return {
                 ...newNode,
-                position: existingNode.position,
-                style: existingNode.style,
+                position: nodeToPreserve.position,
+                style: nodeToPreserve.style,
                 data: {
                   ...newNode.data,
-                  color: existingNode.data?.color || newNode.data?.color
+                  color: nodeToPreserve.data?.color || newNode.data?.color
                 }
               };
             }
@@ -243,50 +280,97 @@ export function SqlEditor() {
             return newNode;
           });
           
-          // Always use the edges directly from the parser
-          // This is critical for preserving relationships
-          const edges = parsedSchema.edges;
+          console.log(`Applying schema with ${preservedNodes.length} nodes and ${parsedSchema.edges.length} edges`);
           
-          console.log(`Applying schema with ${preservedNodes.length} nodes and ${edges.length} edges`);
-          
-          // Update the schema with preserved nodes and edges
+          // Update the schema with preserved nodes and unique edges
           handleUpdateSchema(
             preservedNodes,
-            edges,
+            parsedSchema.edges,
             parsedSchema.enumTypes || []
           );
           
-          // Set the applied SQL for next comparison
+          // Set the applied SQL for next comparison - use the fixed and deduplicated version
           setAppliedSql(processedSql);
           
           if (!isLiveUpdate) {
-            const tablesCount = parsedSchema.nodes.filter(n => n.type !== 'enumType').length;
-            const enumsCount = parsedSchema.nodes.filter(n => n.type === 'enumType').length;
-            const edgesCount = parsedSchema.edges.length;
-            
-            toast.success(
-              `Schema updated with ${tablesCount} tables, ${enumsCount} enums, and ${edgesCount} relationships`
-            );
+            toast.success("SQL changes applied successfully");
+            setIsEditing(false);
           }
-          
-          // Exit editing mode
-          setIsEditing(false);
         }
       } catch (parseError: any) {
-        console.error("SQL parsing error:", parseError);
-        setError(`SQL parsing failed: ${parseError.message}`);
-        if (!isLiveUpdate) {
-          toast.error(`Failed to parse SQL: ${parseError.message}`);
-        }
+        console.error('SQL Parsing Error:', parseError);
+        setError(`Failed to parse SQL: ${parseError.message}`);
         return;
       }
     } catch (error: any) {
-      console.error("SQL application error:", error);
-      setError(error.message || "An error occurred while processing SQL");
-      if (!isLiveUpdate) {
-        toast.error("Failed to update schema");
-      }
+      console.error('SQL Apply Error:', error);
+      setError(`Failed to apply SQL changes: ${error.message}`);
     }
+  };
+
+  // NEW: Function to ensure table names with spaces are properly quoted
+  const ensureTableNamesAreQuoted = (sql: string): string => {
+    // Match CREATE TABLE statements with unquoted table names that contain spaces
+    const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+\s+\w+)(?!\s*["'`])\s*\(/gi;
+    let result = sql.replace(createTableRegex, 'CREATE TABLE "$1" (');
+    
+    // Match ALTER TABLE statements with unquoted table names that contain spaces
+    const alterTableRegex = /ALTER\s+TABLE\s+(\w+\s+\w+)(?!\s*["'`])\s+/gi;
+    result = result.replace(alterTableRegex, 'ALTER TABLE "$1" ');
+    
+    // Match REFERENCES clauses with unquoted table names that contain spaces
+    const referencesRegex = /REFERENCES\s+(\w+\s+\w+)(?!\s*["'`])\s*\(/gi;
+    result = result.replace(referencesRegex, 'REFERENCES "$1" (');
+    
+    return result;
+  };
+
+  /**
+   * Removes duplicate ALTER TABLE statements from SQL
+   */
+  const removeDuplicateAlterTableStatements = (sql: string): string => {
+    // Track unique constraints by their full definition
+    const uniqueConstraints = new Set();
+    
+    // Split the SQL into sections - this keeps non-ALTER TABLE parts untouched
+    const sections = sql.split(/(-- [^\n]+)/);
+    
+    // Process each section
+    const processedSections = sections.map(section => {
+      // Only process Foreign Key Constraints sections
+      if (!section.includes("Foreign Key Constraints")) {
+        return section;
+      }
+      
+      // Split into lines to process individual ALTER TABLE statements
+      const lines = section.split('\n');
+      const uniqueLines = [];
+      
+      for (const line of lines) {
+        // Extract constraint name from ALTER TABLE statement
+        const constraintMatch = /ADD\s+CONSTRAINT\s+(?:"|\`|')?([^"'`\s]+)(?:"|\`|')?/i.exec(line);
+        
+        if (constraintMatch && line.trim().startsWith('ALTER TABLE')) {
+          // Use the full ALTER TABLE statement for uniqueness checking
+          // This catches cases where the same constraint name is used for different definitions
+          const constraintStatement = line.trim();
+          
+          if (!uniqueConstraints.has(constraintStatement)) {
+            uniqueConstraints.add(constraintStatement);
+            uniqueLines.push(line);
+          } else {
+            console.log(`Removed duplicate ALTER TABLE statement: ${constraintStatement}`);
+          }
+        } else {
+          // Keep non-ALTER TABLE lines (comments, blank lines, etc.)
+          uniqueLines.push(line);
+        }
+      }
+      
+      return uniqueLines.join('\n');
+    });
+    
+    return processedSections.join('');
   };
 
   const handleApplySqlChanges = () => {

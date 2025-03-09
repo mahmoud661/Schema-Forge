@@ -162,6 +162,12 @@ export const TablesList: React.FC<TablesListProps> = ({
     onNodeSelect(node);
   };
 
+  // Helper to format type display with parameters
+  const formatTypeDisplay = (typeStr: string) => {
+    // Convert to uppercase for display consistency
+    return typeStr.toUpperCase();
+  };
+
   return (
     <div className="space-y-6">
       {/* TABLES SECTION */}

@@ -1,14 +1,22 @@
 export const getQuotedTableName = (tableName: string, useCaseSensitive: boolean = false): string => {
-  if (useCaseSensitive) {
+  // Always quote tables with spaces
+  const hasSpaces = tableName.includes(' ');
+  
+  if (hasSpaces || useCaseSensitive) {
     return `"${tableName.replace(/"/g, '""')}"`;
   }
+  
   return tableName;
 };
 
 export const getQuotedColumnName = (rowName: string, useCaseSensitive: boolean = false): string => {
-  if (useCaseSensitive) {
+  // Always quote columns with spaces
+  const hasSpaces = rowName.includes(' ');
+  
+  if (hasSpaces || useCaseSensitive) {
     return `"${rowName.replace(/"/g, '""')}"`;
   }
+  
   return rowName;
 };
 
@@ -71,6 +79,8 @@ export const generatePostgresTable = (node: any, useCaseSensitive: boolean = fal
   
   node.data.schema.forEach((row: any, index: number) => {
     const rowName = getQuotedColumnName(row.title, useCaseSensitive);
+    
+    // Use the full type string as is - it may already include parameters like varchar(255)
     sql += `  ${rowName} ${row.type}`;
     
     // Handle defaults
@@ -228,6 +238,17 @@ export const generateSql = (
   // Process edges to collect information about foreign keys for inline format
   const inlineForeignKeys: Record<string, Record<string, any>> = {};
   
+  // Track relationships to avoid duplicates
+  const processedRelationships = new Set<string>();
+  
+  // Track constraint names to avoid duplicates
+  const processedConstraints = new Set<string>();
+  
+  // Create a consistent relationship ID that's case-insensitive for better matching
+  const getConsistentRelationshipId = (sourceTable: string, sourceColumn: string, targetTable: string, targetColumn: string) => {
+    return `${sourceTable.toLowerCase()}:${sourceColumn.toLowerCase()}->${targetTable.toLowerCase()}:${targetColumn.toLowerCase()}`;
+  };
+  
   if (settings.useInlineConstraints) {
     schemaEdges.forEach(edge => {
       // Skip enum edges
@@ -319,45 +340,93 @@ export const generateSql = (
     console.log("fkEdges", fkEdges);
     if (fkEdges.length > 0) {
       sql += "-- Foreign Key Constraints\n";
+      
+      // Track which ALTER TABLE statements we've already added to avoid duplicates
+      const uniqueAlterStatements = new Set<string>();
+      
+      // Process each edge for ALTER TABLE statements
       fkEdges.forEach(edge => {
         const sourceNode = schemaNodes.find(n => n.id === edge.source);
         const targetNode = schemaNodes.find(n => n.id === edge.target);
         
         if (!sourceNode || !targetNode) return;
         
-        // Parse the handle format to get the row name - improved for stability
+        // Extract column names from handles - improved to handle renamed columns
         const sourceHandle = edge.sourceHandle || '';
         const targetHandle = edge.targetHandle || '';
         
-        // Extract column names from handles
-        const sourceColumn = sourceHandle.startsWith('source-') 
-          ? sourceHandle.substring('source-'.length) 
-          : (edge.data?.sourceColumn || 'id');
+        // Use the data property first if available, otherwise extract from handle
+        const sourceColumn = edge.data?.sourceColumn || 
+                            (sourceHandle.startsWith('source-') 
+                              ? sourceHandle.substring('source-'.length) 
+                              : 'id');
           
-        const targetColumn = targetHandle.startsWith('target-') 
-          ? targetHandle.substring('target-'.length) 
-          : (edge.data?.targetColumn || 'id');
+        const targetColumn = edge.data?.targetColumn || 
+                            (targetHandle.startsWith('target-') 
+                              ? targetHandle.substring('target-'.length) 
+                              : 'id');
         
+        // Enhanced debugging for constraint issues
+        console.log(`Generating FK constraint: ${sourceNode.data.label}(${sourceColumn}) -> ${targetNode.data.label}(${targetColumn})`);
+        console.log(`Source handle: ${sourceHandle}, Target handle: ${targetHandle}`);
+        
+        // Create a consistent relationship ID
+        const relationshipId = getConsistentRelationshipId(
+          sourceNode.data.label,
+          sourceColumn,
+          targetNode.data.label,
+          targetColumn
+        );
+        
+        // Skip if we've already processed this relationship
+        if (processedRelationships.has(relationshipId)) {
+          console.log(`Skipping duplicate relationship: ${relationshipId}`);
+          return;
+        }
+        processedRelationships.add(relationshipId);
+        
+        // Always quote table names with spaces, regardless of case sensitivity setting
         const sourceTableName = getQuotedTableName(sourceNode.data.label, settings.caseSensitiveIdentifiers);
         const targetTableName = getQuotedTableName(targetNode.data.label, settings.caseSensitiveIdentifiers);
+        
+        // Ensure column names are properly quoted, especially if they contain spaces
         const sourceColumnName = getQuotedColumnName(sourceColumn, settings.caseSensitiveIdentifiers);
         const targetColumnName = getQuotedColumnName(targetColumn, settings.caseSensitiveIdentifiers);
         
-        // Create a unique constraint name based on the tables and columns
-        const constraintName = settings.caseSensitiveIdentifiers 
-          ? `"fk_${sourceNode.data.label.replace(/\s/g, '_')}_${sourceColumn.replace(/\s/g, '_')}"`
-          : `fk_${sourceNode.data.label.toLowerCase().replace(/\s/g, '_')}_${sourceColumn.toLowerCase().replace(/\s/g, '_')}`;
+        // Create a unique constraint name based on sanitized table and column names
+        const safeSourceTable = sourceNode.data.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const safeSourceColumn = sourceColumn.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         
+        const constraintName = settings.caseSensitiveIdentifiers 
+          ? `"fk_${safeSourceTable}_${safeSourceColumn}"`
+          : `fk_${safeSourceTable}_${safeSourceColumn}`;
+          
+        // Skip if we've already used this constraint name
+        const normalizedConstraintName = constraintName.toLowerCase().replace(/^["'`]|["'`]$/g, '');
+        if (processedConstraints.has(normalizedConstraintName)) {
+          console.log(`Skipping duplicate constraint name: ${constraintName}`);
+          return;
+        }
+        processedConstraints.add(normalizedConstraintName);
+        
+        // Create the ALTER TABLE statement
+        let alterStatement = '';
         if (type === "postgresql" || type === "mysql") {
-          sql += `ALTER TABLE ${sourceTableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName});\n`;
+          alterStatement = `ALTER TABLE ${sourceTableName} ADD CONSTRAINT ${constraintName} FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName});`;
         } else if (type === "sqlite") {
-          // SQLite doesn't support ALTER TABLE for foreign keys
-          sql += `-- For SQLite, foreign keys should be defined in the CREATE TABLE statement\n`;
-          sql += `-- Example: FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName})\n`;
+          alterStatement = `-- For SQLite, foreign keys should be defined in the CREATE TABLE statement\n-- Example: FOREIGN KEY (${sourceColumnName}) REFERENCES ${targetTableName}(${targetColumnName})`;
+        }
+        
+        // Only add if we haven't added this exact statement already
+        if (!uniqueAlterStatements.has(alterStatement)) {
+          sql += alterStatement + "\n";
+          uniqueAlterStatements.add(alterStatement);
+        } else {
+          console.log(`Skipping duplicate ALTER TABLE statement: ${alterStatement}`);
         }
       });
     }
   }
-  console.log("sqksdnflkd", sql);
+  
   return sql;
 };

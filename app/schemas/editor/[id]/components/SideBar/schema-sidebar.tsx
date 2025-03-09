@@ -42,8 +42,13 @@ interface SidebarProps {
 const dataTypes = [
   { id: "uuid", label: "UUID", icon: KeyRound },
   { id: "varchar", label: "VARCHAR", icon: Type },
+  { id: "char", label: "CHAR", icon: Type },
   { id: "text", label: "TEXT", icon: Type },
+  { id: "int", label: "INT", icon: Hash },
   { id: "int4", label: "INTEGER", icon: Hash },
+  { id: "serial", label: "SERIAL", icon: Hash },
+  { id: "decimal", label: "DECIMAL", icon: Hash },
+  { id: "numeric", label: "NUMERIC", icon: Hash },
   { id: "money", label: "MONEY", icon: Hash },
   { id: "timestamp", label: "TIMESTAMP", icon: Hash },
   { id: "boolean", label: "BOOLEAN", icon: Hash },

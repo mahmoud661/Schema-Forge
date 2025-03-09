@@ -26,7 +26,9 @@ export const useTableOperations = (
     if (!selectedNode) return;
     const newSchema = [...(selectedNode.data?.schema || [])];
     
+    // If changing the column name, we need to update any edges that reference this column
     if (field === 'title') {
+      const oldTitle = newSchema[index].title;
       const existingTitles = selectedNode.data.schema
         .map((c: any) => c.title)
         .filter((_: any, i: number) => i !== index);
@@ -34,6 +36,47 @@ export const useTableOperations = (
       if (existingTitles.includes(value)) {
         toast.warning(`Row name "${value}" already exists in this table`);
         value = `${value}_${index}`;
+      }
+      
+      // After validating the new name, update any edges that reference this column
+      if (oldTitle !== value) {
+        // Find and update edges that reference this column
+        const updatedEdges = schema.edges.map(edge => {
+          // Check if this edge is connected to the selected node's column
+          const isSourceEdge = edge.source === selectedNode.id && 
+                              edge.sourceHandle === `source-${oldTitle}`;
+          const isTargetEdge = edge.target === selectedNode.id && 
+                              edge.targetHandle === `target-${oldTitle}`;
+                              
+          if (isSourceEdge) {
+            // Update the source handle to the new column name
+            return {
+              ...edge,
+              sourceHandle: `source-${value}`,
+              // Also update the data property if it exists
+              data: edge.data ? {
+                ...edge.data,
+                sourceColumn: value
+              } : undefined
+            };
+          } else if (isTargetEdge) {
+            // Update the target handle to the new column name
+            return {
+              ...edge,
+              targetHandle: `target-${value}`,
+              // Also update the data property if it exists
+              data: edge.data ? {
+                ...edge.data,
+                targetColumn: value
+              } : undefined
+            };
+          }
+          
+          return edge;
+        });
+        
+        // Update the edges in the store
+        updateEdges(updatedEdges);
       }
     }
     

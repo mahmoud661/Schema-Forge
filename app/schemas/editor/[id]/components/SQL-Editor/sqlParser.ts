@@ -1,6 +1,23 @@
 import { mapToBaseType } from "./sqlGenerators";
 import { useSchemaStore } from "@/hooks/use-schema";
 
+// Helper function to create consistent relationship IDs
+function createRelationshipId(sourceTable: string, sourceColumn: string, targetTable: string, targetColumn: string): string {
+  // Normalize for consistent lookup regardless of case
+  return `${sourceTable.toLowerCase()}:${sourceColumn.toLowerCase()}->${targetTable.toLowerCase()}:${targetColumn.toLowerCase()}`;
+}
+
+// Improve case-insensitive lookups for tables and columns
+function normalizeIdentifier(identifier: string): string {
+  return identifier.toLowerCase().replace(/^["'`]|["'`]$/g, '');
+}
+
+// NEW: Normalize table name consistently regardless of quoting style
+function normalizeTableName(name: string): string {
+  // Remove any quotes and convert to lowercase for normalized comparison
+  return name.replace(/^["'`]|["'`]$/g, '').toLowerCase();
+}
+
 export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enumTypes?: any[] } | null => {
   try {
     const newNodes: any[] = [];
@@ -10,23 +27,33 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     const enumTypes: any[] = [];
     const enumNodeMap: Record<string, string> = {}; // enumName -> nodeId
     
-    // Store all pending foreign key constraints to process after all tables are created
+    // Track all foreign key relationships by their relationship ID to avoid duplicates
+    const processedRelationships = new Set<string>();
+    
+    // Track constraint names to avoid duplicates
+    const processedConstraints = new Set<string>();
+    
+    // Store all pending foreign key constraints
     const pendingForeignKeys: Array<{
       sourceNodeId: string;
       sourceColumn: string;
       targetTable: string;
       targetColumn: string;
+      relationshipId: string;
+      sourceTable: string;
+      constraintName?: string;
     }> = [];
     
     // Get existing nodes for position/color preservation
     const existingNodesMap = new Map();
     useSchemaStore.getState().schema.nodes.forEach(node => {
       if (node.type === 'databaseSchema' || !node.type) {
+        // Store with case-insensitive key for better matching
         existingNodesMap.set(node.data.label.toLowerCase(), node);
       }
     });
 
-    // Map for enum nodes
+    // Map for enum nodes - also case insensitive for consistent lookup
     const existingEnumMap = new Map();
     useSchemaStore.getState().schema.nodes.forEach(node => {
       if (node.type === 'enumType') {
@@ -87,7 +114,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     }
     
     // FIRST PASS: Extract all table definitions
-    const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
+    // IMPROVED: More robust table regex that properly handles spaces in names
+    const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
     let tableMatch;
     let tableIndex = 0;
     let foundTables = false;
@@ -98,14 +126,17 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       const tableContent = tableMatch[5];
       if (!tableName || !tableContent) continue;
       
+      // Preserve original table name without any modifications
+      const originalName = tableName;
+      
       // Store both normalized and original names for proper lookup
-      const normalizedName = tableName.toLowerCase();
+      const normalizedName = normalizeTableName(tableName);
       const nodeId = `sql-node-${Date.now()}-${tableIndex}`;
       tableMap[normalizedName] = nodeId;
-      tableMap[tableName] = nodeId; // Also store with original case
+      tableMap[originalName] = nodeId; // Also store with original name including spaces
       rowMap[normalizedName] = {};
       
-      console.log(`Parsed table: "${tableName}" with ID: ${nodeId}`);
+      console.log(`Parsed table: "${originalName}" with ID: ${nodeId}`);
       
       const rows: any[] = [];
       // Split by commas not inside parentheses
@@ -132,7 +163,9 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               sourceNodeId: nodeId,
               sourceColumn: constraint.sourceColumn,
               targetTable: constraint.targetTable,
-              targetColumn: constraint.targetColumn
+              targetColumn: constraint.targetColumn,
+              relationshipId: createRelationshipId(tableName, constraint.sourceColumn, constraint.targetTable, constraint.targetColumn),
+              sourceTable: tableName
             });
             
             console.log(`Added FK constraint: ${constraint.sourceColumn} -> ${constraint.targetTable}(${constraint.targetColumn})`);
@@ -145,15 +178,29 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           continue;
         }
         
-        // IMPROVED: More robust regex for parsing row definitions including inline REFERENCES
-        // Match either quoted identifiers or bare words followed by type and constraints
-        const rowRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\([^)]*\))?)(?:\s+(.*))?$/i;
+        // IMPROVED: More robust regex for parsing row definitions including inline REFERENCES and type parameters
+        // This regex now better captures type parameters like VARCHAR(100) or DECIMAL(10,2)
+        const rowRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\s*\([^)]*\))?)(?:\s+(.*))?$/i;
         const rowMatch = rowLine.match(rowRegex);
         
         if (rowMatch) {
           let rowName = rowMatch[1] || rowMatch[2] || rowMatch[3] || rowMatch[4];
           rowName = rowName.replace(/^["'`]|["'`]$/g, '');
-          let rowType = rowMatch[5];
+          
+          // Preserve the full type string with parameters (e.g., VARCHAR(100))
+          let rowType = rowMatch[5].trim();
+          
+          // Handle INT/INTEGER type conversion for consistency
+          if (rowType.toUpperCase() === 'INTEGER' || rowType.toUpperCase() === 'INT') {
+            rowType = rowType.toLowerCase();
+          }
+          
+          // Special handling for SERIAL type (PostgreSQL auto-increment)
+          if (rowType.toUpperCase() === 'SERIAL') {
+            rowType = 'serial';
+            constraints.push('primary');
+          }
+          
           const constraintText = rowMatch[6] || '';
           const constraints: string[] = [];
           
@@ -228,7 +275,9 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               sourceNodeId: nodeId,
               sourceColumn: rowName,
               targetTable: targetTable, 
-              targetColumn: targetColumn
+              targetColumn: targetColumn,
+              relationshipId: createRelationshipId(tableName, rowName, targetTable, targetColumn),
+              sourceTable: tableName
             });
           }
           
@@ -249,7 +298,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           
           rows.push({
             title: rowName,
-            type: rowType,
+            type: rowType, // Now contains the full type with parameters
             constraints,
             id: rowId,
             default: defaultValue,
@@ -295,76 +344,94 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           type: 'databaseSchema',
           position: position,
           data: { 
-            label: tableName, 
+            label: originalName, // Use original table name to preserve case and spaces
             schema: rows,
             // Only include color if it was previously set
             ...(color && { color })
           }
         });
         
-        // Store inline constraints for the second pass
-        for (const constraint of inlineConstraints) {
-          pendingForeignKeys.push({
-            sourceNodeId: nodeId,
-            sourceColumn: constraint.sourceColumn,
-            targetTable: constraint.targetTable,
-            targetColumn: constraint.targetColumn
-          });
-        }
-        
         tableIndex++;
       }
     }
     
     // SECOND PASS: Extract ALTER TABLE foreign key constraints
-    console.log("Parsing ALTER TABLE statements with improved pattern...");
+    console.log("Parsing ALTER TABLE statements...");
     
-    // Improved regex that better handles quoted identifiers and whitespace
-    const alterTableRegex = /ALTER\s+TABLE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+ADD\s+(?:CONSTRAINT\s+(?:`|"|')?\w+(?:`|"|')?\s+)?FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
+    // IMPROVED: Enhanced regex that better handles spaces in table names
+    const alterTableRegex = /ALTER\s+TABLE\s+(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s+ADD\s+(?:CONSTRAINT\s+(?:`|"|')?([^`"'\s]+)(?:`|"|')?\s+)?FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
     let alterMatch;
 
     while ((alterMatch = alterTableRegex.exec(sql)) !== null) {
-      const sourceTable = alterMatch[1].replace(/^["'`]|["'`]$/g, '');
-      const sourceColumn = alterMatch[2].replace(/^["'`]|["'`]$/g, '');
-      const targetTable = alterMatch[3].replace(/^["'`]|["'`]$/g, '');
-      const targetColumn = alterMatch[4].replace(/^["'`]|["'`]$/g, '');
+      const sourceTable = alterMatch[1] || alterMatch[2] || alterMatch[3] || alterMatch[4];
+      if (!sourceTable) continue;
       
-      console.log(`Found FK: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
+      const constraintName = alterMatch[5]?.replace(/^["'`]|["'`]$/g, '');
+      const sourceColumn = alterMatch[6]?.replace(/^["'`]|["'`]$/g, '');
+      const targetTable = alterMatch[7]?.replace(/^["'`]|["'`]$/g, '');
+      const targetColumn = alterMatch[8]?.replace(/^["'`]|["'`]$/g, '');
       
-      // Debug log all available tables
-      console.log("Available tables:", Object.keys(tableMap).join(", "));
+      if (!sourceColumn || !targetTable || !targetColumn) continue;
       
-      // Look up table IDs using original casing and normalized casing
-      let sourceNodeId = tableMap[sourceTable] || tableMap[sourceTable.toLowerCase()];
-      let targetNodeId = tableMap[targetTable] || tableMap[targetTable.toLowerCase()];
+      // Create a relationship ID for consistent tracking
+      const relationshipId = createRelationshipId(sourceTable, sourceColumn, targetTable, targetColumn);
       
-      console.log(`Source node ID: ${sourceNodeId}, Target node ID: ${targetNodeId}`);
+      console.log(`Found ALTER TABLE FK: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
       
-      if (sourceNodeId && targetNodeId) {
-        console.log(`Creating edge: ${sourceNodeId} -> ${targetNodeId}`);
+      // Check if we've seen this constraint name before
+      if (constraintName && processedConstraints.has(constraintName.toLowerCase())) {
+        console.log(`Skipping duplicate constraint name: ${constraintName}`);
+        continue;
+      }
+      
+      // Only process if we haven't seen this relationship before
+      if (!processedRelationships.has(relationshipId)) {
+        processedRelationships.add(relationshipId);
         
-        // Create the edge with proper handle formatting and preserve properties
-        const newEdge = createEdge(
-          sourceNodeId,
-          targetNodeId,
-          sourceColumn,
-          targetColumn,
-          existingEdgesMap // Pass existing edges map to preserve properties
-        );
+        // If we have a constraint name, add it to processed constraints
+        if (constraintName) {
+          processedConstraints.add(constraintName.toLowerCase());
+        }
         
-        newEdges.push(newEdge);
-        console.log(`Edge created: ${newEdge.id}`);
+        // Look up table IDs with enhanced case-insensitive matching
+        // Try multiple possible versions of the table name
+        const sourceNodeId = findTableInMap(tableMap, sourceTable);
+        
+        if (sourceNodeId) {
+          pendingForeignKeys.push({
+            sourceNodeId,
+            sourceColumn,
+            targetTable,
+            targetColumn,
+            relationshipId,
+            sourceTable,
+            constraintName
+          });
+          
+          console.log(`Added FK from ALTER TABLE: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
+        } else {
+          console.warn(`Could not map source table to node: ${sourceTable}`);
+        }
       } else {
-        console.warn(`Could not map tables to nodes: ${sourceTable} -> ${targetTable}`);
+        console.log(`Skipping duplicate ALTER TABLE constraint: ${relationshipId}`);
       }
     }
     
     // FINAL PASS: Process all pending foreign keys now that all tables are created
     console.log(`Processing ${pendingForeignKeys.length} pending foreign key relationships`);
     
-    for (const fk of pendingForeignKeys) {
-      // Look up target node ID using both original and lowercase table names
-      const targetNodeId = tableMap[fk.targetTable] || tableMap[fk.targetTable.toLowerCase()];
+    // Deduplicate foreign keys by relationship ID to avoid duplicate edges
+    const uniqueForeignKeys = new Map<string, typeof pendingForeignKeys[0]>();
+    pendingForeignKeys.forEach(fk => {
+      uniqueForeignKeys.set(fk.relationshipId, fk);
+    });
+    
+    console.log(`After deduplication: ${uniqueForeignKeys.size} unique relationships`);
+    
+    // Create edges for each unique foreign key relationship
+    for (const fk of uniqueForeignKeys.values()) {
+      // Look up target node ID with case-insensitive matching
+      const targetNodeId = findTableInMap(tableMap, fk.targetTable);
       
       if (targetNodeId) {
         const edge = createEdge(
@@ -372,14 +439,12 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           targetNodeId,
           fk.sourceColumn,
           fk.targetColumn,
-          existingEdgesMap // Pass existing edges map to preserve properties
+          existingEdgesMap
         );
         newEdges.push(edge);
-        console.log(`Created edge: ${fk.sourceNodeId} -> ${targetNodeId} (${fk.sourceColumn} -> ${fk.targetColumn})`);
+        console.log(`Created edge: ${fk.sourceTable}(${fk.sourceColumn}) -> ${fk.targetTable}(${fk.targetColumn})`);
       } else {
         console.warn(`Missing target table mapping for FK: ${fk.targetTable}`);
-        console.warn(`Available tables in map:`, Object.keys(tableMap).join(', '));
-        console.warn(`Looking for table: ${fk.targetTable} (lowercase: ${fk.targetTable.toLowerCase()})`);
       }
     }
 
@@ -401,6 +466,35 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     throw new Error(`Failed to parse SQL: ${error.message}`);
   }
 };
+
+// Helper to find a table in the tableMap with enhanced matching to handle spaces
+function findTableInMap(tableMap: Record<string, string>, tableName: string): string | undefined {
+  // First try exact match
+  if (tableMap[tableName]) {
+    return tableMap[tableName];
+  }
+  
+  // Try with normalized name (lowercase, no quotes)
+  const normalizedName = normalizeTableName(tableName);
+  if (tableMap[normalizedName]) {
+    return tableMap[normalizedName];
+  }
+  
+  // Try with spaces normalized to underscores
+  const underscoreName = normalizedName.replace(/\s+/g, '_');
+  if (tableMap[underscoreName]) {
+    return tableMap[underscoreName];
+  }
+  
+  // Finally try case-insensitive search through all keys
+  for (const key in tableMap) {
+    if (normalizeTableName(key) === normalizedName) {
+      return tableMap[key];
+    }
+  }
+  
+  return undefined;
+}
 
 // Keep the improved createEdge function
 function createEdge(sourceNodeId: string, targetNodeId: string, sourceColumn: string, targetColumn: string, existingEdgesMap?: Map<string, any>) {
