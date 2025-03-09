@@ -1,4 +1,4 @@
-import { SchemaNode, EnumTypeNode } from "@/app/schemas/editor/[id]/types";
+import { SchemaNode, EnumTypeNode } from "@/app/schemas/editor/[id]/types/types";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronDown, ChevronRight, Database, Type, Trash2, X, Plus, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -11,8 +11,8 @@ export default function HomePage() {
       <Navigation />
       <div className="flex min-h-[calc(100vh-4rem)] flex-col">
         <main className="flex-1">
-          <section className="relative hero-gradient space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32">
-            <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center">
+          <section className="relative hero-gradient space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32 flex justify-center items-center">
+            <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center justify-center">
               <div className="rounded-2xl px-4 py-1.5 text-sm font-medium">
                 <span className="text-primary">✨ Visualize Your Database Schema</span>
               </div>
@@ -39,7 +39,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section className="container space-y-6 py-8 md:py-12 lg:py-24">
+          <section className="container space-y-6 py-8 md:py-12 lg:py-24 bg-transparent">
             <div className="mx-auto grid justify-center gap-6 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">
               <div className="relative overflow-hidden rounded-xl border bg-gradient-to-b from-background to-background/80 shadow-lg transition-all hover:shadow-xl">
                 <div className="flex h-[180px] flex-col justify-between rounded-md p-6">

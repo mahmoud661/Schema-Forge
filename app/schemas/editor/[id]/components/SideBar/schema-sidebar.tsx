@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Table, KeyRound, Hash, Type, PaintBucket } from "lucide-react";
-import { SchemaNode, SchemaNodeData, EnumTypeNode } from "@/app/schemas/editor/[id]/types";
+import { SchemaNode, SchemaNodeData, EnumTypeNode } from "@/app/schemas/editor/[id]/types/types";
 import { BaseSidebar } from "../../../../../../components/ui/sidebar";
 import { useSidebarStore } from "@/app/schemas/editor/[id]/store/sidebar-store";
 import { useTheme } from "next-themes";

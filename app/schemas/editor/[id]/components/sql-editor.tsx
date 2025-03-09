@@ -12,7 +12,7 @@ import { parseSqlToSchema } from "./SQL-Editor/sqlParser";
 import EditorComponent from "./SQL-Editor/EditorComponent";
 import { validateSqlSyntax, fixCommonSqlIssues } from "./SQL-Editor/sql-validation";
 import { useSchemaStore } from "@/hooks/use-schema";
-import { SchemaNode } from "../types";
+import { SchemaNode } from "../types/types";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {

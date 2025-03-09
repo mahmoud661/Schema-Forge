@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { SchemaNode, EnumTypeNode } from "../types";
+import { SchemaNode, EnumTypeNode } from "../types/types";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { toast } from "sonner";
 

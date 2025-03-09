@@ -23,11 +23,13 @@ export interface SchemaNodeData {
     dark: string;
     border: string;
   };
+  [key: string]: any; // Add index signature
 }
 
 export interface EnumNodeData {
   name: string;
   values: string[];
+  [key: string]: any; // Add index signature
 }
 
 export type SchemaNode = Node<SchemaNodeData>;

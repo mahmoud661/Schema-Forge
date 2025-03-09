@@ -12,7 +12,7 @@ import {
   DatabaseSchemaTableCell,
 } from "@/components/database-schema-node";
 import { Badge } from "@/components/ui/badge";
-import { SchemaNodeData, ColumnSchema } from "@/app/schemas/editor/[id]/types";
+import { SchemaNodeData, ColumnSchema } from "@/app/schemas/editor/[id]/types/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";

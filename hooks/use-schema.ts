@@ -1,4 +1,4 @@
-import { SchemaNode } from "@/app/schemas/editor/[id]/types";
+import { SchemaNode } from "@/app/schemas/editor/[id]/types/types";
 import {
   Edge,
   Connection,

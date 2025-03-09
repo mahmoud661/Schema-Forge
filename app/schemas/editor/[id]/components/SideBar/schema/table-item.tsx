@@ -1,7 +1,7 @@
 import { ChevronDown, Table } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { themeAwareStringToColor } from "@/lib/utils";
-import { SchemaNode, EnumTypeNode } from "@/app/schemas/editor/[id]/types";
+import { SchemaNode, EnumTypeNode } from "@/app/schemas/editor/[id]/types/types";
 import {
   Collapsible,
   CollapsibleContent,

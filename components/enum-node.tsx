@@ -4,7 +4,7 @@ import { memo, useEffect, useState } from "react";
 import { Position, Handle, NodeProps } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
-import { EnumNodeData } from "@/app/schemas/editor/[id]/types";
+import { EnumNodeData } from "@/app/schemas/editor/[id]/types/types";
 
 interface EnumNodeProps extends NodeProps {
   data: EnumNodeData;

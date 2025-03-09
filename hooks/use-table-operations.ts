@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { SchemaNode } from "@/app/schemas/editor/[id]/types";
+import { SchemaNode } from "@/app/schemas/editor/[id]/types/types";
 import { useEnumConnections } from "./use-enum-connections";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { useCallback } from "react";

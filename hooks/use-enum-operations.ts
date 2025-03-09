@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { EnumTypeNode, SchemaNode } from "@/app/schemas/editor/[id]/types";
+import { EnumTypeNode, SchemaNode } from "@/app/schemas/editor/[id]/types/types";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { useSchemaFlow } from "@/app/schemas/editor/[id]/hooks/use-schema-flow";
 

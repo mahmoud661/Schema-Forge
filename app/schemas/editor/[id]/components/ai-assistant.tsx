@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Bot, Sparkles, Copy, Check, Code } from "lucide-react";
-import { SchemaNode } from "../types";
+import { SchemaNode } from "../types/types";
 import { BaseSidebar } from "@/components/ui/sidebar";
 import { useSidebarStore } from "../store/sidebar-store";
 

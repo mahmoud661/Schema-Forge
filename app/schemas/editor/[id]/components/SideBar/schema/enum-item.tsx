@@ -1,4 +1,4 @@
-import { EnumTypeNode } from "@/app/schemas/editor/[id]/types";
+import { EnumTypeNode } from "@/app/schemas/editor/[id]/types/types";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
