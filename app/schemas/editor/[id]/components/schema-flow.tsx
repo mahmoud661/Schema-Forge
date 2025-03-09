@@ -1,7 +1,7 @@
 import React, { useCallback, memo, useMemo, useEffect, useState } from "react";
 import { ReactFlow, ReactFlowProvider, useReactFlow, ViewportHelperFunctions } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import "@/lib/schema-flow-styles.css";
+import "@/styles/schema-flow-styles.css";
 import { Toaster } from "sonner";
 
 import SchemaNode from "@/components/schema-node";
