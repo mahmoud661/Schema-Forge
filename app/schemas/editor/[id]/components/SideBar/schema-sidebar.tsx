@@ -30,62 +30,43 @@ import { toast } from "sonner";
 import { useCallback } from "react";
 import { generateColorVariants } from "@/lib/color-utils";
 
-interface SidebarProps {
-  selectedNode: SchemaNode | EnumTypeNode | null;
-  onUpdateNode: (data: Partial<SchemaNodeData | any>) => void;
-  onDeleteNode: (node: SchemaNode | EnumTypeNode) => void;
-  duplicateRows?: Record<string, { isDuplicate: boolean; tables: string[] }>;
-  nodes: (SchemaNode | EnumTypeNode)[];
-  onNodeSelect: (node: SchemaNode | EnumTypeNode) => void;
-}
-
-const dataTypes = [
-  { id: "uuid", label: "UUID", icon: KeyRound },
-  { id: "varchar", label: "VARCHAR", icon: Type },
-  { id: "char", label: "CHAR", icon: Type },
-  { id: "text", label: "TEXT", icon: Type },
-  { id: "int", label: "INT", icon: Hash },
-  { id: "int4", label: "INTEGER", icon: Hash },
-  { id: "serial", label: "SERIAL", icon: Hash },
-  { id: "decimal", label: "DECIMAL", icon: Hash },
-  { id: "numeric", label: "NUMERIC", icon: Hash },
-  { id: "money", label: "MONEY", icon: Hash },
-  { id: "timestamp", label: "TIMESTAMP", icon: Hash },
-  { id: "boolean", label: "BOOLEAN", icon: Hash },
-  { id: "jsonb", label: "JSONB", icon: Type },
-  { id: "date", label: "DATE", icon: Hash },
-  { id: "time", label: "TIME", icon: Hash },
-];
-
-const constraints = [
-  { id: "primary", label: "Primary Key" },
-  { id: "unique", label: "Unique" },
-  { id: "notnull", label: "Not Null" },
-  { id: "index", label: "Index" },
-];
-
-export function Sidebar({ 
-  selectedNode, 
-  onUpdateNode, 
-  onDeleteNode,
-  duplicateRows, 
-  nodes, // This now always contains all nodes
-  onNodeSelect 
-}: SidebarProps) {
+export function Sidebar() {
   const { widths, updateWidth } = useSidebarStore();
   const { resolvedTheme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
-  const { schema, updateNodeData } = useSchemaStore(); // Add this to use central store directly
-  const enumTypes = schema.enumTypes || [];
   
+  // Access schema store directly 
+  const { 
+    schema, 
+    updateNodeData: updateNodeDataInStore, 
+    setSelectedNode,
+    deleteNode: deleteNodeInStore
+  } = useSchemaStore(); 
+  
+  const { 
+    nodes, 
+    selectedNode, 
+    duplicateRows,
+    enumTypes = []
+  } = schema;
+
+  // Use appropriate selectedNode for operations
   const tableOperations = useTableOperations(
     selectedNode && (selectedNode.type === 'databaseSchema' || !selectedNode.type) ? selectedNode as SchemaNode : null,
-    onUpdateNode
+    (data) => {
+      if (selectedNode) {
+        updateNodeDataInStore(selectedNode.id, data);
+      }
+    }
   );
   
   const enumOperations = useEnumOperations(
     selectedNode?.type === 'enumType' ? selectedNode as EnumTypeNode : null,
-    onUpdateNode,
+    (data) => {
+      if (selectedNode) {
+        updateNodeDataInStore(selectedNode.id, data);
+      }
+    },
     nodes
   );
   
@@ -98,19 +79,7 @@ export function Sidebar({
   
   // Handle enum operations directly from TablesList
   const handleUpdateEnum = (nodeId: string, data: Partial<any>) => {
-    const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as EnumTypeNode;
-    if (enumNode) {
-      // For renaming the enum type
-      if (data.name && data.name !== enumNode.data.name) {
-        const oldName = enumNode.data.name;
-        onUpdateNode({...data});
-
-        // This is handled by useEnumOperations
-      } else {
-        // For other updates like modifying values
-        onUpdateNode({...data});
-      }
-    }
+    updateNodeDataInStore(nodeId, data);
   };
   
   const handleAddEnumValue = (nodeId: string, value: string) => {
@@ -122,7 +91,7 @@ export function Sidebar({
         return;
       }
       
-      onUpdateNode({
+      updateNodeDataInStore(nodeId, {
         values: [...enumNode.data.values, value]
       });
       
@@ -133,37 +102,26 @@ export function Sidebar({
   const handleRemoveEnumValue = (nodeId: string, value: string) => {
     const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as EnumTypeNode;
     if (enumNode) {
-      onUpdateNode({
+      updateNodeDataInStore(nodeId, {
         values: enumNode.data.values.filter(v => v !== value)
       });
     }
   };
 
-  // Move hooks to component top level
   const handleColorChange = useCallback((nodeId: string, tableColor: any, colorType: 'light' | 'dark' | 'border', color: string) => {
-    // Update via the central store for immediate effect
-    updateNodeData(nodeId, {
+    // Update only via the store
+    updateNodeDataInStore(nodeId, {
       color: {
         ...tableColor,
         [colorType]: color
       }
     });
-    
-    // Also update via prop method for parent components
-    onUpdateNode({
-      color: {
-        ...tableColor,
-        [colorType]: color
-      }
-    });
-  }, [updateNodeData, onUpdateNode]);
+  }, [updateNodeDataInStore]);
 
   const handleResetColors = useCallback((nodeId: string) => {
-    // Update both ways
-    updateNodeData(nodeId, { color: null });
-    onUpdateNode({ color: null });
+    updateNodeDataInStore(nodeId, { color: null });
     toast.success("Reset to default table colors");
-  }, [updateNodeData, onUpdateNode]);
+  }, [updateNodeDataInStore]);
 
   // Fast Color Update function
   const handleFastColorChange = useCallback((nodeId: string, color: string) => {
@@ -176,14 +134,9 @@ export function Sidebar({
       window.__schemaColorUpdater(nodeId, colorVariants);
     } else {
       // Fall back to standard update
-      updateNodeData(nodeId, { color: colorVariants });
+      updateNodeDataInStore(nodeId, { color: colorVariants });
     }
-    
-    // Also update via prop method for parent components
-    onUpdateNode({
-      color: colorVariants
-    });
-  }, [updateNodeData, onUpdateNode]);
+  }, [updateNodeDataInStore]);
 
   // Update the border color handler to only send the border color
   const handleBorderColorChange = useCallback((nodeId: string, color: string) => {
@@ -201,18 +154,17 @@ export function Sidebar({
       window.__schemaColorUpdater(nodeId, colorData);
     } else {
       // Fall back to standard update
-      updateNodeData(nodeId, { color: colorData });
+      updateNodeDataInStore(nodeId, { color: colorData });
     }
-    
-    // Also update via prop method for parent components
-    onUpdateNode({
-      color: colorData
-    });
-  }, [updateNodeData, onUpdateNode]);
+  }, [updateNodeDataInStore]);
+  
+  const onNodeSelect = (node: SchemaNode | EnumTypeNode) => {
+    setSelectedNode(node);
+  };
 
   // Render table content only when a table is selected
   const renderTableContent = (node: SchemaNode) => {
-    if (node.id !== selectedNode?.id || selectedNode.type === 'enumType') return null;
+    if (!selectedNode || node.id !== selectedNode.id || selectedNode.type === 'enumType') return null;
     
     // Get current color values or defaults
     const defaultColor = {
@@ -234,9 +186,7 @@ export function Sidebar({
               placeholder="Enter table name" 
               value={node.data?.label || ''}
               onChange={(e) => {
-                // Update both ways for immediate effect
-                updateNodeData(node.id, { label: e.target.value });
-                onUpdateNode({ label: e.target.value });
+                updateNodeDataInStore(node.id, { label: e.target.value });
               }}
               className="h-8 text-sm"
             />
@@ -282,7 +232,7 @@ export function Sidebar({
               onUpdateColumn={tableOperations.updateColumn}
               onRemoveColumn={tableOperations.removeColumn}
               onToggleConstraint={tableOperations.toggleConstraint}
-              duplicateRows={duplicateRows}
+              duplicateRows={duplicateRows && selectedNode.data?.label ? duplicateRows[selectedNode.data.label] : undefined}
               dataTypes={dataTypes}
               constraints={constraints}
               enumTypes={enumTypes}
@@ -296,7 +246,7 @@ export function Sidebar({
               variant="destructive" 
               size="sm"
               className="h-7 text-xs" 
-              onClick={() => selectedNode && onDeleteNode(selectedNode)}
+              onClick={() => selectedNode && deleteNodeInStore(selectedNode)}
             >
               Delete Table
             </Button>
@@ -322,13 +272,13 @@ export function Sidebar({
         {/* Scrollable Node List - Always render all nodes with key for better updates */}
         <div key={`sidebar-nodes-${nodes.length}`} className="flex-1 overflow-y-auto p-3 custom-scrollbar">
           <TablesList 
-            nodes={nodes} // We're now correctly passing all nodes
+            nodes={nodes}
             selectedNode={selectedNode}
             onNodeSelect={onNodeSelect}
             isDarkMode={isDarkMode}
             tableContent={renderTableContent}
             onUpdateEnum={handleUpdateEnum}
-            onDeleteNode={onDeleteNode}
+            onDeleteNode={deleteNodeInStore}
             onAddEnumValue={handleAddEnumValue}
             onRemoveEnumValue={handleRemoveEnumValue}
             enumTypes={enumTypes}
@@ -338,3 +288,29 @@ export function Sidebar({
     </BaseSidebar>
   );
 }
+
+// The dataTypes and constraints arrays definitions remain unchanged
+const dataTypes = [
+  { id: "uuid", label: "UUID", icon: KeyRound },
+  { id: "varchar", label: "VARCHAR", icon: Type },
+  { id: "char", label: "CHAR", icon: Type },
+  { id: "text", label: "TEXT", icon: Type },
+  { id: "int", label: "INT", icon: Hash },
+  { id: "int4", label: "INTEGER", icon: Hash },
+  { id: "serial", label: "SERIAL", icon: Hash },
+  { id: "decimal", label: "DECIMAL", icon: Hash },
+  { id: "numeric", label: "NUMERIC", icon: Hash },
+  { id: "money", label: "MONEY", icon: Hash },
+  { id: "timestamp", label: "TIMESTAMP", icon: Hash },
+  { id: "boolean", label: "BOOLEAN", icon: Hash },
+  { id: "jsonb", label: "JSONB", icon: Type },
+  { id: "date", label: "DATE", icon: Hash },
+  { id: "time", label: "TIME", icon: Hash },
+];
+
+const constraints = [
+  { id: "primary", label: "Primary Key" },
+  { id: "unique", label: "Unique" },
+  { id: "notnull", label: "Not Null" },
+  { id: "index", label: "Index" },
+];

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowRight, Database, Search, Users } from "lucide-react";
 import { Navigation } from "@/components/navigation";
 import { RouteLoader } from "@/components/route-loader";
-
 export default function HomePage() {
   return (
     <>
@@ -14,14 +13,17 @@ export default function HomePage() {
           <section className="relative hero-gradient space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32 flex justify-center items-center">
             <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center justify-center">
               <div className="rounded-2xl px-4 py-1.5 text-sm font-medium">
-                <span className="text-primary">✨ Visualize Your Database Schema</span>
+                <span className="text-primary">
+                  ✨ Visualize Your Database Schema
+                </span>
               </div>
               <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl lg:text-7xl bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/50 font-bold">
                 Database Schema Visualization Made Simple
               </h1>
               <p className="max-w-[42rem] leading-normal text-muted-foreground sm:text-xl sm:leading-8">
-                Visualize and understand your database relationships with our interactive schema viewer.
-                Perfect for developers, architects, and teams.
+                Visualize and understand your database relationships with our
+                interactive schema viewer. Perfect for developers, architects,
+                and teams.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link href="/schemas">
@@ -31,7 +33,11 @@ export default function HomePage() {
                   </Button>
                 </Link>
                 <Link href="/browse">
-                  <Button variant="outline" size="lg" className="border-primary/20 hover:bg-primary/10">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-primary/20 hover:bg-primary/10"
+                  >
                     Browse Examples
                   </Button>
                 </Link>
@@ -47,7 +53,8 @@ export default function HomePage() {
                   <div className="space-y-2">
                     <h3 className="font-bold">Interactive Schemas</h3>
                     <p className="text-sm text-muted-foreground">
-                      Visualize your database relationships in real-time with interactive diagrams.
+                      Visualize your database relationships in real-time with
+                      interactive diagrams.
                     </p>
                   </div>
                 </div>
@@ -58,7 +65,8 @@ export default function HomePage() {
                   <div className="space-y-2">
                     <h3 className="font-bold">Easy Navigation</h3>
                     <p className="text-sm text-muted-foreground">
-                      Explore your database structure with intuitive navigation and search.
+                      Explore your database structure with intuitive navigation
+                      and search.
                     </p>
                   </div>
                 </div>

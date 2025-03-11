@@ -60,6 +60,9 @@ interface SchemaState {
   onConnect: (connection: Connection) => void;
   addNode: (node: SchemaNode) => void;
   updateEdge: (oldEdge: Edge, newConnection: Connection) => void;
+
+  // Add this new action to the interface
+  deleteNode: (node: SchemaNode | any) => void;
 }
 
 const initialSchema = {
@@ -128,9 +131,24 @@ const storeImplementation = (set: any) => ({
 
   updateEdges: (edges: Edge[]) =>
     set(
-      (state: any) => ({
-        schema: { ...state.schema, edges },
-      }),
+      (state: any) => {
+        // Deduplicate edges by ID before storing
+        const uniqueEdges = [];
+        const edgeIds = new Set();
+        
+        for (const edge of edges) {
+          if (!edgeIds.has(edge.id)) {
+            edgeIds.add(edge.id);
+            uniqueEdges.push(edge);
+          } else {
+            console.warn(`Duplicate edge ID detected: ${edge.id}`);
+          }
+        }
+        
+        return {
+          schema: { ...state.schema, edges: uniqueEdges },
+        };
+      },
       false,
       "updateEdges"
     ),
@@ -345,12 +363,30 @@ const storeImplementation = (set: any) => ({
   onConnect: (connection: Connection) =>
     set(
       (state: any) => {
+        // Create a more unique edge ID with timestamp and random component
+        const uniqueId = `e${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        
         const newEdge = {
           ...connection,
-          id: `e${connection.source}-${connection.target}`,
-          type: "smoothstep",
+          id: uniqueId,
+          type: 'smoothstep',
           animated: true,
         };
+        
+        // Check for duplicate connections
+        const duplicateEdge = state.schema.edges.some(
+          (edge: Edge) => 
+            edge.source === connection.source && 
+            edge.target === connection.target &&
+            edge.sourceHandle === connection.sourceHandle && 
+            edge.targetHandle === connection.targetHandle
+        );
+        
+        if (duplicateEdge) {
+          console.warn("Duplicate connection prevented");
+          return state; // Return unchanged state
+        }
+        
         return {
           schema: {
             ...state.schema,
@@ -386,6 +422,78 @@ const storeImplementation = (set: any) => ({
       }),
       false,
       "updateEdge"
+    ),
+
+  // Add the deleteNode implementation
+  deleteNode: (node: SchemaNode | any) =>
+    set(
+      (state: any) => {
+        if (!node) return state;
+        
+        // Handle enum type deletion
+        if (node.type === 'enumType') {
+          // Check if this enum is used by any tables
+          const usedByRows: { table: string; row: string }[] = [];
+          
+          state.schema.nodes.forEach((tableNode: any) => {
+            if ((tableNode.type === 'databaseSchema' || !tableNode.type) && tableNode.data?.schema) {
+              tableNode.data.schema.forEach((row: any) => {
+                if (row.type === `enum_${node.data.name}`) {
+                  usedByRows.push({
+                    table: tableNode.data.label,
+                    row: row.title
+                  });
+                }
+              });
+            }
+          });
+          
+          // If enum is in use, don't delete it
+          if (usedByRows.length > 0) {
+            console.error(`Cannot delete: This ENUM is used by ${usedByRows.length} row(s)`);
+            return state; // Return unchanged state
+          }
+          
+          // Get the enum index for removal
+          const enumIndex = state.schema.enumTypes?.findIndex((et: any) => 
+            et.name === node.data.name
+          );
+          
+          // We'll update enum types if needed
+          let updatedEnumTypes = [...(state.schema.enumTypes || [])];
+          if (enumIndex !== -1) {
+            updatedEnumTypes = updatedEnumTypes.filter((_, i) => i !== enumIndex);
+          }
+        }
+        
+        // Remove all edges connected to this node
+        const updatedEdges = state.schema.edges.filter(
+          (edge: Edge) => edge.source !== node.id && edge.target !== node.id
+        );
+        
+        // Remove the node itself
+        const updatedNodes = state.schema.nodes.filter(
+          (n: SchemaNode) => n.id !== node.id
+        );
+        
+        // Clear selection if the deleted node was selected
+        const updatedSelectedNode = 
+          state.schema.selectedNode?.id === node.id
+            ? null
+            : state.schema.selectedNode;
+        
+        return {
+          schema: {
+            ...state.schema,
+            nodes: updatedNodes,
+            edges: updatedEdges,
+            selectedNode: updatedSelectedNode,
+            enumTypes: node.type === 'enumType' ? updatedEnumTypes : state.schema.enumTypes
+          }
+        };
+      },
+      false,
+      "deleteNode"
     ),
 });
 

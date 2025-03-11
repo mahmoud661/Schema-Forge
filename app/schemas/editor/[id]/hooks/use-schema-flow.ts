@@ -152,9 +152,9 @@ export function useSchemaFlow() {
           // Update nodes with the new schema
           updateNodes(updatedNodes);
           
-          // Create the edge connection with proper enum styling
+          // Create the edge connection with proper enum styling and a more unique ID
           const newEdge = {
-            id: `e-enum-${params.source}-${params.target}-${rowName}`,
+            id: `enum-edge-${Date.now()}-${params.source}-${params.target}-${rowName}`,
             source: params.source,
             target: params.target,
             sourceHandle: params.sourceHandle,
@@ -185,7 +185,7 @@ export function useSchemaFlow() {
             title: `${sourceNode.data.label.toLowerCase()}_id`,
             type: "uuid",
             constraints: ["notnull"],
-            id: `row-${Date.now()}-${Math.random()}`
+            id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
           };
           
           // Update the target node with the new row
@@ -204,9 +204,12 @@ export function useSchemaFlow() {
           
           updateNodes(updatedNodes);
           
-          // Create the edge connection to the new row
+          // Create a more unique edge ID including timestamp
+          const uniqueEdgeId = `edge-${Date.now()}-${params.source}-${params.target}-${Math.random().toString(36).substring(2, 7)}`;
+          
+          // Create the edge connection to the new row with the unique ID
           const newEdge = {
-            id: `e${params.source}-${params.target}`,
+            id: uniqueEdgeId,
             source: params.source,
             target: params.target,
             sourceHandle: params.sourceHandle,
@@ -232,10 +235,26 @@ export function useSchemaFlow() {
           return;
         }
         
-        // Add the new edge for normal connections
+        // Check if an edge with the same source and target handles already exists
+        const existingEdge = edges.find(edge => 
+          edge.source === params.source && 
+          edge.sourceHandle === params.sourceHandle &&
+          edge.target === params.target &&
+          edge.targetHandle === params.targetHandle
+        );
+        
+        if (existingEdge) {
+          toast.warning("This connection already exists");
+          return;
+        }
+        
+        // Generate a unique ID with timestamp and random string
+        const uniqueId = `e${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${params.source}-${params.target}`;
+        
+        // Add the new edge for normal connections with the unique ID
         updateEdges([...edges, {
           ...params,
-          id: `e${params.source}-${params.target}`,
+          id: uniqueId,
           type: 'smoothstep',
           animated: true,
         } as Edge]);

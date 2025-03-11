@@ -195,15 +195,14 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
             rowType = rowType.toLowerCase();
           }
           
-          // Special handling for SERIAL type (PostgreSQL auto-increment)
-          if (rowType.toUpperCase() === 'SERIAL') {
-            rowType = 'serial';
-            constraints.push('primary');
-          }
-          
           const constraintText = rowMatch[6] || '';
           const constraints: string[] = [];
-          
+
+             // Special handling for SERIAL type (PostgreSQL auto-increment)
+             if (rowType.toUpperCase() === 'SERIAL') {
+              rowType = 'serial';
+              constraints.push('primary');
+            }
           // Check for enum type
           let isEnum = false;
           let enumTypeName = '';

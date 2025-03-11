@@ -168,58 +168,19 @@ export function useSchemaNodes() {
   }, [getNode, setSelectedNode, updateNodeDataInStore]);
 
   const deleteNode = useCallback((node: SchemaNode | EnumTypeNode) => {
-    if (!node) return;
+    if (!node) return false;
     
-    // Handle enum type deletion
-    if (node.type === 'enumType') {
-      // First check if this enum is used by any tables
-      const usedByRows: { table: string; row: string }[] = [];
-      
-      schema.nodes.forEach(tableNode => {
-        if ((tableNode.type === 'databaseSchema' || !tableNode.type) && tableNode.data.schema) {
-          tableNode.data.schema.forEach((row: any) => {
-            if (row.type === `enum_${node.data.name}`) {
-              usedByRows.push({
-                table: tableNode.data.label,
-                row: row.title
-              });
-            }
-          });
-        }
-      });
-      
-      // If enum is in use, don't delete
-      if (usedByRows.length > 0) {
-        toast.error(`Cannot delete: This ENUM is used by ${usedByRows.length} row(s)`);
-        return false;
-      }
-      
-      // Remove from enum store
-      const enumIndex = schema.enumTypes.findIndex(et => et.name === node.data.name);
-      if (enumIndex !== -1) {
-        removeEnumType(enumIndex);
-      }
+    // Use the store's deleteNode function directly
+    const result = useSchemaStore.getState().deleteNode(node);
+    
+    // Show success toast if node was deleted
+    const wasDeleted = result !== false;
+    if (wasDeleted) {
+      toast.success(`Deleted ${node.type === 'enumType' ? 'ENUM type' : 'table'} successfully`);
     }
     
-    // Clean up any edges connected to this node
-    const updatedEdges = schema.edges.filter(
-      edge => edge.source !== node.id && edge.target !== node.id
-    );
-    
-    if (updatedEdges.length !== schema.edges.length) {
-      updateEdges(updatedEdges);
-    }
-    
-    // Remove the node from the canvas
-    const updatedNodes = schema.nodes.filter(n => n.id !== node.id);
-    updateNodes(updatedNodes);
-    
-    // Clear selection
-    setSelectedNode(null);
-    
-    toast.success(`Deleted ${node.type === 'enumType' ? 'ENUM type' : 'table'} successfully`);
-    return true;
-  }, [schema.nodes, schema.edges, schema.enumTypes, updateNodes, updateEdges, removeEnumType, setSelectedNode]);
+    return wasDeleted;
+  }, []);
 
   return {
     selectedNode: schema.selectedNode,

@@ -7,11 +7,10 @@ import { Send, Bot, Sparkles, Copy, Check, Code } from "lucide-react";
 import { SchemaNode } from "../types/types";
 import { BaseSidebar } from "@/components/ui/sidebar";
 import { useSidebarStore } from "../store/sidebar-store";
+import { useSchemaStore } from "@/hooks/use-schema";
 
 interface AiAssistantProps {
-  nodes: SchemaNode[];
-  edges: any[];
-  onApplySuggestion: (nodes: SchemaNode[], edges: any[]) => void;
+  onApplySuggestion: (nodes: any[], edges: any[]) => void;
 }
 
 interface Message {
@@ -24,7 +23,11 @@ interface Message {
   };
 }
 
-export function AiAssistant({ nodes, edges, onApplySuggestion }: AiAssistantProps) {
+export function AiAssistant({ onApplySuggestion }: AiAssistantProps) {
+  // Access schema store directly
+  const { schema } = useSchemaStore();
+  const { nodes, edges } = schema;
+
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {

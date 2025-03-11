@@ -3,6 +3,7 @@ import { ReactFlow } from "@xyflow/react";
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
 import { FlowControls } from "./flow-controls";
+import { useSchemaStore } from "@/hooks/use-schema";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
@@ -10,20 +11,43 @@ const nodeTypes = {
 };
 
 interface FlowConfigProps {
-  nodes: any[];
-  edges: any[];
   flowHooks: any;
   nodeHooks: any;
   refreshKey: number;
 }
 
 export function FlowConfig({ 
-  nodes, 
-  edges, 
   flowHooks, 
   nodeHooks,
   refreshKey
 }: FlowConfigProps) {
+  // Access nodes and edges directly from the store
+  const { schema } = useSchemaStore();
+  const { nodes: storeNodes, edges: storeEdges } = schema;
+
+  // Deduplicate nodes and edges to prevent React key errors
+  const nodes = useMemo(() => {
+    // Use a Map to ensure unique IDs
+    const nodeMap = new Map();
+    storeNodes.forEach(node => {
+      if (!nodeMap.has(node.id)) {
+        nodeMap.set(node.id, node);
+      }
+    });
+    return Array.from(nodeMap.values());
+  }, [storeNodes]);
+  
+  const edges = useMemo(() => {
+    // Use a Map to ensure unique edge IDs
+    const edgeMap = new Map();
+    storeEdges.forEach(edge => {
+      if (!edgeMap.has(edge.id)) {
+        edgeMap.set(edge.id, edge);
+      }
+    });
+    return Array.from(edgeMap.values());
+  }, [storeEdges]);
+
   // Performance enhancement: Optimize panning and viewport for large diagrams
   const onInit = useCallback((reactFlowInstance: any) => {
     reactFlowInstance.fitView({
@@ -65,7 +89,6 @@ export function FlowConfig({
         className="bg-muted/30"
         style={{ width: '100%', height: '100%' }}
         connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
-        connectionLineType="smoothstep"
         snapToGrid={true}
         snapGrid={[15, 15]}
         defaultEdgeOptions={{

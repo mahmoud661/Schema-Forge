@@ -23,11 +23,10 @@ export function EditorLayout({
   refreshKey
 }: EditorLayoutProps) {
   const { schema } = useSchemaStore();
-  const { nodes, edges } = schema;
+  const { selectedEdge } = schema;
   
   const { 
     onSave, 
-    selectedEdge, 
     setSelectedEdge,
     updateEdgeData 
   } = flowHooks;
@@ -43,21 +42,10 @@ export function EditorLayout({
       />
       
       <div ref={nodeHooks.reactFlowWrapper} className="flex-1 flex overflow-hidden">
-        <SidebarContainer 
-          activeTab={activeTab}
-          nodes={nodes}
-          edges={edges}
-          selectedNode={nodeHooks.selectedNode}
-          onNodeClick={nodeHooks.onNodeClick}
-          updateNodeData={nodeHooks.updateNodeData}
-          deleteNode={nodeHooks.deleteNode}
-          duplicateRows={flowHooks.duplicateRows}
-        />
+        <SidebarContainer activeTab={activeTab} />
         
         <div className="flex-1 h-full">
           <FlowConfig
-            nodes={nodes}
-            edges={edges}
             flowHooks={flowHooks}
             nodeHooks={nodeHooks}
             refreshKey={refreshKey}
