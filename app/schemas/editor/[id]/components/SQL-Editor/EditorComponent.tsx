@@ -5,12 +5,11 @@ import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 
 interface EditorComponentProps {
   isEditing: boolean;
-  editableSql: string;
-  sqlContent: string;
-  setEditableSql: (sql: string) => void;
+  sqlCode: string;
+  onChange?: (sql: string) => void;
 }
 
-const EditorComponent = ({ isEditing, editableSql, sqlContent, setEditableSql }: EditorComponentProps) => {
+const EditorComponent = ({ isEditing, sqlCode, onChange }: EditorComponentProps) => {
   const editorConfig = {
     lineNumbers: true,
     highlightSpecialChars: true,
@@ -31,24 +30,15 @@ const EditorComponent = ({ isEditing, editableSql, sqlContent, setEditableSql }:
     highlightSelectionMatches: true,
     indentUnit: 2,
   };
-  return isEditing ? (
+  return (
     <CodeMirror
-      value={editableSql}
-      onChange={setEditableSql}
+      value={sqlCode}
+      onChange={isEditing ? onChange : undefined}
+      readOnly={!isEditing}
       height="100%"
       theme={vscodeDark}
       extensions={[sql()]}
-      basicSetup={editConfig}
-      className="h-full min-h-[500px]"
-    />
-  ) : (
-    <CodeMirror
-      value={sqlContent}
-      readOnly={true}
-      height="100%"
-      theme={vscodeDark}
-      extensions={[sql()]}
-      basicSetup={editorConfig}
+      basicSetup={isEditing ? editConfig : editorConfig}
       className="h-full min-h-[500px]"
     />
   );

@@ -4,17 +4,17 @@ import EditorComponent from "../EditorComponent";
 interface SqlEditorContentProps {
   error: string | null;
   isEditing: boolean;
-  editableSql: string;
-  sqlContent: string;
-  setEditableSql: (sql: string) => void;
+  sqlCode: string;
+  editingSqlCode: string;
+  setEditingSqlCode: (sql: string) => void;
 }
 
 export function SqlEditorContent({
   error,
   isEditing,
-  editableSql,
-  sqlContent,
-  setEditableSql
+  sqlCode,
+  editingSqlCode,
+  setEditingSqlCode
 }: SqlEditorContentProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -32,9 +32,8 @@ export function SqlEditorContent({
       <div className="flex-1 h-full bg-muted/30 overflow-hidden">
         <EditorComponent 
           isEditing={isEditing}
-          editableSql={editableSql}
-          sqlContent={sqlContent}
-          setEditableSql={setEditableSql}
+          sqlCode={isEditing ? editingSqlCode : sqlCode}
+          onChange={isEditing ? setEditingSqlCode : undefined}
         />
       </div>
     </div>

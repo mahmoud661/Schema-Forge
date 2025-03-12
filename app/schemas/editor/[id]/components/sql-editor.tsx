@@ -41,9 +41,9 @@ export function SqlEditor() {
       <SqlEditorContent 
         error={sqlEditor.error}
         isEditing={sqlEditor.isEditing}
-        editableSql={sqlEditor.editableSql}
-        sqlContent={sqlEditor.sqlContent}
-        setEditableSql={sqlEditor.setEditableSql}
+        sqlCode={sqlEditor.sqlCode}
+        editingSqlCode={sqlEditor.editingSqlCode}
+        setEditingSqlCode={sqlEditor.setEditingSqlCode}
       />
     </BaseSidebar>
   );
