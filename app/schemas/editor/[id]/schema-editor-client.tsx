@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactFlowProvider } from "@xyflow/react";
-import { SchemaFlow } from "./components/schema-flow";
+import { SchemaFlow } from "./components/schemaFlow/schema-flow";
 
 export default function SchemaEditorClient() {
   return (

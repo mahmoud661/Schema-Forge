@@ -3,7 +3,7 @@ import { useSchemaStore } from "@/hooks/use-schema";
 import { EditorHeader } from "./editor-header";
 import { EdgeSidebar } from "./edge-sidebar";
 import { SidebarContainer } from "./sidebar-container";
-import { FlowConfig } from "./flow-config";
+import { FlowConfig } from "./schemaFlow/flow-config";
 
 interface EditorLayoutProps {
   children: React.ReactNode;

@@ -3,11 +3,11 @@ import "@xyflow/react/dist/style.css";
 import "@/styles/schema-flow-styles.css";
 import { Toaster } from "sonner";
 
-import { useSchemaFlow } from "../hooks/use-schema-flow";
-import { useSchemaNodes } from "../hooks/use-schema-nodes";
+import { useSchemaFlow } from "../../hooks/use-schema-flow";
+import { useSchemaNodes } from "../../hooks/use-schema-nodes";
 import { useSchemaStore } from "@/hooks/use-schema";
-import { EditorLayout } from "./editor-layout";
-import { useColorHandlers } from "./color-handlers";
+import { EditorLayout } from ".././editor-layout";
+import { useColorHandlers } from ".././color-handlers";
 
 export function SchemaFlow() {
   // Use the centralized schema store
