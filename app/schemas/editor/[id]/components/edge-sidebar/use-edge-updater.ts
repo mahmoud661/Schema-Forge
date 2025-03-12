@@ -25,16 +25,23 @@ export function useEdgeUpdater(
     typeof selectedEdge.label === 'string' ? selectedEdge.label : ''
   );
   
+  // Add local state for animation toggle
+  const [localAnimated, setLocalAnimated] = useState<boolean>(
+    selectedEdge.animated || false
+  );
+  
   // Update local states whenever selected edge changes
   useEffect(() => {
     setLocalColor((selectedEdge.style?.stroke as string) || '#3b82f6');
     setLocalDisplayType(selectedEdge.data?.displayType || 'smoothstep');
     setLocalLabel(typeof selectedEdge.label === 'string' ? selectedEdge.label : '');
+    setLocalAnimated(selectedEdge.animated || false);
   }, [
     selectedEdge.id, 
     selectedEdge.style?.stroke, 
     selectedEdge.data,
     selectedEdge.label,
+    selectedEdge.animated,
     selectedEdge.data?.displayType,
     selectedEdge.data?.relationshipType
   ]);
@@ -69,25 +76,33 @@ export function useEdgeUpdater(
     });
   }, [selectedEdge, onUpdateEdge]);
 
-  // Type change handler
+  // Type change handler - preserve animated state using localAnimated
   const handleTypeChange = useCallback((value: string) => {
     setLocalDisplayType(value);
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
+      // Use local animated state instead of selectedEdge.animated
+      animated: localAnimated,
       data: {
         ...selectedEdge.data,
         displayType: value,
       }
     });
-  }, [selectedEdge, onUpdateEdge]);
+  }, [selectedEdge, onUpdateEdge, localAnimated]); // Add localAnimated to dependencies
 
-  // Animation toggle handler
+  // Animation toggle handler - preserve display type
   const handleAnimatedChange = useCallback((value: boolean) => {
+    setLocalAnimated(value);
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,
       animated: value,
+      // Explicitly preserve the display type when toggling animation
+      data: {
+        ...selectedEdge.data,
+        displayType: localDisplayType
+      }
     });
-  }, [selectedEdge, onUpdateEdge]);
+  }, [selectedEdge, onUpdateEdge, localDisplayType]); // Add localDisplayType to dependencies
 
   // Relationship type change handler
   const handleRelationshipTypeChange = useCallback((value: string) => {
@@ -160,6 +175,7 @@ export function useEdgeUpdater(
     localLabel,
     localColor,
     localDisplayType,
+    localAnimated, // Add this to returned values
     currentStrokeWidth,
     handleLabelChange,
     handleTypeChange,

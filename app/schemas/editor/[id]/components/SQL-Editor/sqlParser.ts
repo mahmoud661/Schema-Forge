@@ -1,39 +1,33 @@
 import { mapToBaseType } from "./sqlGenerators";
 import { useSchemaStore } from "@/hooks/use-schema";
 
-// Helper function to create consistent relationship IDs
+// Helper functions for name normalization and relationship identification
 function createRelationshipId(sourceTable: string, sourceColumn: string, targetTable: string, targetColumn: string): string {
-  // Normalize for consistent lookup regardless of case
   return `${sourceTable.toLowerCase()}:${sourceColumn.toLowerCase()}->${targetTable.toLowerCase()}:${targetColumn.toLowerCase()}`;
 }
 
-// Improve case-insensitive lookups for tables and columns
 function normalizeIdentifier(identifier: string): string {
   return identifier.toLowerCase().replace(/^["'`]|["'`]$/g, '');
 }
 
-// NEW: Normalize table name consistently regardless of quoting style
 function normalizeTableName(name: string): string {
-  // Remove any quotes and convert to lowercase for normalized comparison
   return name.replace(/^["'`]|["'`]$/g, '').toLowerCase();
 }
 
 export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enumTypes?: any[] } | null => {
   try {
+    // Initialize schema components
     const newNodes: any[] = [];
     const newEdges: any[] = [];
     const tableMap: Record<string, string> = {};
-    const rowMap: Record<string, Record<string, string>> = {}; // table -> row -> nodeId
+    const tableNameToNodeIdMap: Record<string, string> = {};
+    const rowMap: Record<string, Record<string, string>> = {};
     const enumTypes: any[] = [];
-    const enumNodeMap: Record<string, string> = {}; // enumName -> nodeId
+    const enumNodeMap: Record<string, string> = {};
     
-    // Track all foreign key relationships by their relationship ID to avoid duplicates
+    // Tracking sets to avoid duplicates
     const processedRelationships = new Set<string>();
-    
-    // Track constraint names to avoid duplicates
     const processedConstraints = new Set<string>();
-    
-    // Store all pending foreign key constraints
     const pendingForeignKeys: Array<{
       sourceNodeId: string;
       sourceColumn: string;
@@ -44,43 +38,62 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       constraintName?: string;
     }> = [];
     
-    // Get existing nodes for position/color preservation
+    // Load existing schema data for preservation
     const existingNodesMap = new Map();
-    useSchemaStore.getState().schema.nodes.forEach(node => {
+    const allNodes = useSchemaStore.getState().schema.nodes;
+    
+    // Build node mapping for lookups
+    allNodes.forEach(node => {
       if (node.type === 'databaseSchema' || !node.type) {
-        // Store with case-insensitive key for better matching
         existingNodesMap.set(node.data.label.toLowerCase(), node);
+        tableNameToNodeIdMap[node.data.label.toLowerCase()] = node.id;
       }
     });
 
-    // Map for enum nodes - also case insensitive for consistent lookup
+    // Map enum nodes
     const existingEnumMap = new Map();
-    useSchemaStore.getState().schema.nodes.forEach(node => {
+    allNodes.forEach(node => {
       if (node.type === 'enumType') {
         existingEnumMap.set(node.data.name.toLowerCase(), node);
       }
     });
 
-    // Get existing edges for preservation
+    // Build edge mappings for preservation
+    const allEdges = useSchemaStore.getState().schema.edges;
     const existingEdgesMap = new Map();
-    useSchemaStore.getState().schema.edges.forEach(edge => {
-      // Create a stable key for the edge relationship
-      const key = `${edge.source}:${edge.sourceHandle}:${edge.target}:${edge.targetHandle}`;
-      existingEdgesMap.set(key, edge);
+    const relationshipToEdgeMap = new Map();
+    
+    allEdges.forEach(edge => {
+      // Basic ID-based mapping
+      existingEdgesMap.set(`${edge.source}:${edge.sourceHandle}:${edge.target}:${edge.targetHandle}`, edge);
+      
+      // Relationship-based mapping (more stable across node ID changes)
+      const sourceColumn = edge.data?.sourceColumn || 
+                         (edge.sourceHandle?.startsWith('source-') ? edge.sourceHandle.substring(7) : null);
+      const targetColumn = edge.data?.targetColumn || 
+                         (edge.targetHandle?.startsWith('target-') ? edge.targetHandle.substring(7) : null);
+      
+      const sourceNode = allNodes.find(n => n.id === edge.source);
+      const targetNode = allNodes.find(n => n.id === edge.target);
+      
+      if (sourceNode?.data?.label && targetNode?.data?.label && sourceColumn && targetColumn) {
+        const relationshipKey = `${sourceNode.data.label.toLowerCase()}:${sourceColumn.toLowerCase()}->${targetNode.data.label.toLowerCase()}:${targetColumn.toLowerCase()}`;
+        relationshipToEdgeMap.set(relationshipKey, edge);
+      }
     });
 
-    // First extract ENUM types
+    // STEP 1: Parse ENUM type definitions
+    let enumIndex = 0;
     const enumRegex = /CREATE\s+TYPE\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s+AS\s+ENUM\s*\(\s*((?:'[^']*'(?:\s*,\s*'[^']*')*)\s*)\)/gi;
     let enumMatch;
-    let enumIndex = 0;
 
     while ((enumMatch = enumRegex.exec(sql)) !== null) {
       const enumName = enumMatch[1].replace(/^["'`]|["'`]$/g, '');
       const valuesString = enumMatch[2];
       
-      // Extract the enum values from the string
-      const valueRegex = /'([^']*)'/g;
+      // Extract enum values
       const values: string[] = [];
+      const valueRegex = /'([^']*)'/g;
       let valueMatch;
       while ((valueMatch = valueRegex.exec(valuesString)) !== null) {
         values.push(valueMatch[1]);
@@ -91,17 +104,13 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         values: values
       });
       
-      // Create an enum node for the visual flow
+      // Create enum node with preserved position if it exists
       const nodeId = `enum-node-${Date.now()}-${enumIndex}`;
       enumNodeMap[enumName.toLowerCase()] = nodeId;
       
-      // Check if enum already exists to preserve position
       const existingEnum = existingEnumMap.get(enumName.toLowerCase());
-      const enumPosition = existingEnum 
-        ? existingEnum.position 
-        : { x: 100 + enumIndex * 250, y: 100 };
+      const enumPosition = existingEnum ? existingEnum.position : { x: 100 + enumIndex * 250, y: 100 };
       
-      // Add the enum node to the newNodes array with preserved position
       newNodes.push({
         id: nodeId,
         type: 'enumType',
@@ -110,15 +119,13 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       });
       
       enumIndex++;
-      console.log(`Parsed ENUM type: ${enumName} with values: ${values.join(', ')}`);
     }
     
-    // FIRST PASS: Extract all table definitions
-    // IMPROVED: More robust table regex that properly handles spaces in names
-    const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
-    let tableMatch;
+    // STEP 2: Parse table definitions
     let tableIndex = 0;
     let foundTables = false;
+    const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s*\(\s*([\s\S]*?)(?:\s*\)\s*;)/gi;
+    let tableMatch;
     
     while ((tableMatch = tableRegex.exec(sql)) !== null) {
       foundTables = true;
@@ -126,28 +133,20 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       const tableContent = tableMatch[5];
       if (!tableName || !tableContent) continue;
       
-      // Preserve original table name without any modifications
       const originalName = tableName;
-      
-      // Store both normalized and original names for proper lookup
       const normalizedName = normalizeTableName(tableName);
       const nodeId = `sql-node-${Date.now()}-${tableIndex}`;
       tableMap[normalizedName] = nodeId;
-      tableMap[originalName] = nodeId; // Also store with original name including spaces
+      tableMap[originalName] = nodeId;
       rowMap[normalizedName] = {};
       
-      console.log(`Parsed table: "${originalName}" with ID: ${nodeId}`);
-      
+      // Process rows in table definition
       const rows: any[] = [];
-      // Split by commas not inside parentheses
-      const rowLines = tableContent.split(/,(?![^(]*\))/)
-        .map(line => line.trim()).filter(line => line.length > 0);
       const rowNames = new Set();
-      const inlineConstraints: any[] = [];
+      const rowLines = tableContent.split(/,(?![^(]*\))/).map(line => line.trim()).filter(line => line.length > 0);
       
-      // Process rows and collect inline constraints
       for (const rowLine of rowLines) {
-        // Check if line is a foreign key constraint
+        // Handle foreign key constraints
         if (/FOREIGN\s+KEY/i.test(rowLine)) {
           const fkMatch = /FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"'\s(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(rowLine);
           if (fkMatch) {
@@ -156,9 +155,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               targetTable: fkMatch[2].trim().replace(/^["'`]|["'`]$/g, ''),
               targetColumn: fkMatch[3].trim().replace(/^["'`]|["'`]$/g, '')
             };
-            inlineConstraints.push(constraint);
             
-            // Also add to the pending foreign keys list
             pendingForeignKeys.push({
               sourceNodeId: nodeId,
               sourceColumn: constraint.sourceColumn,
@@ -167,185 +164,146 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
               relationshipId: createRelationshipId(tableName, constraint.sourceColumn, constraint.targetTable, constraint.targetColumn),
               sourceTable: tableName
             });
-            
-            console.log(`Added FK constraint: ${constraint.sourceColumn} -> ${constraint.targetTable}(${constraint.targetColumn})`);
           }
           continue;
         }
         
-        // Skip other constraints that are not columns
-        if (/^\s*(?:PRIMARY\s+KEY|UNIQUE|CHECK|CONSTRAINT)/i.test(rowLine)) {
-          continue;
-        }
+        // Skip other non-column constraints
+        if (/^\s*(?:PRIMARY\s+KEY|UNIQUE|CHECK|CONSTRAINT)/i.test(rowLine)) continue;
         
-        // IMPROVED: More robust regex for parsing row definitions including inline REFERENCES and type parameters
-        // This regex now better captures type parameters like VARCHAR(100) or DECIMAL(10,2)
+        // Parse column definition
         const rowRegex = /^\s*(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+([A-Za-z0-9_]+(?:\s*\([^)]*\))?)(?:\s+(.*))?$/i;
         const rowMatch = rowLine.match(rowRegex);
         
-        if (rowMatch) {
-          let rowName = rowMatch[1] || rowMatch[2] || rowMatch[3] || rowMatch[4];
-          rowName = rowName.replace(/^["'`]|["'`]$/g, '');
-          
-          // Preserve the full type string with parameters (e.g., VARCHAR(100))
-          let rowType = rowMatch[5].trim();
-          
-          // Handle INT/INTEGER type conversion for consistency
-          if (rowType.toUpperCase() === 'INTEGER' || rowType.toUpperCase() === 'INT') {
-            rowType = rowType.toLowerCase();
-          }
-          
-          const constraintText = rowMatch[6] || '';
-          const constraints: string[] = [];
-
-             // Special handling for SERIAL type (PostgreSQL auto-increment)
-             if (rowType.toUpperCase() === 'SERIAL') {
-              rowType = 'serial';
-              constraints.push('primary');
-            }
-          // Check for enum type
-          let isEnum = false;
-          let enumTypeName = '';
-          
-          // Check both for exact enum type name and for enum_prefix format
-          if (rowType.startsWith('enum_')) {
-            // Format: enum_typename
+        if (!rowMatch) continue;
+        
+        let rowName = rowMatch[1] || rowMatch[2] || rowMatch[3] || rowMatch[4];
+        rowName = rowName.replace(/^["'`]|["'`]$/g, '');
+        let rowType = rowMatch[5].trim();
+        const constraintText = rowMatch[6] || '';
+        const constraints: string[] = [];
+        
+        // Handle special types and constraints
+        if (rowType.toUpperCase() === 'INTEGER' || rowType.toUpperCase() === 'INT') {
+          rowType = rowType.toLowerCase();
+        }
+        if (rowType.toUpperCase() === 'SERIAL') {
+          rowType = 'serial';
+          constraints.push('primary');
+        }
+        
+        // Process enum type references
+        let isEnum = false;
+        let enumTypeName = '';
+        
+        if (rowType.startsWith('enum_')) {
+          isEnum = true;
+          enumTypeName = rowType.substring(5);
+        } else {
+          const matchingEnum = enumTypes.find(et => et.name.toLowerCase() === rowType.toLowerCase());
+          if (matchingEnum) {
             isEnum = true;
-            enumTypeName = rowType.substring(5); // Remove 'enum_' prefix
-          } else {
-            // Check if the type directly matches an enum name (case-insensitive)
-            const matchingEnum = enumTypes.find(et => 
-              et.name.toLowerCase() === rowType.toLowerCase()
-            );
-            
-            if (matchingEnum) {
-              isEnum = true;
-              enumTypeName = matchingEnum.name;
-              // Convert to standard format for consistency
-              rowType = `enum_${enumTypeName.toLowerCase()}`;
-            }
+            enumTypeName = matchingEnum.name;
+            rowType = `enum_${enumTypeName.toLowerCase()}`;
           }
-          
-          if (rowType.toUpperCase() === 'SERIAL') {
-            rowType = 'int4';
-            constraints.push('primary');
+        }
+        
+        // Extract constraints and default value
+        let defaultValue = null;
+        if (constraintText.toUpperCase().includes('PRIMARY KEY')) constraints.push('primary');
+        if (constraintText.toUpperCase().includes('NOT NULL')) constraints.push('notnull');
+        if (constraintText.toUpperCase().includes('UNIQUE')) constraints.push('unique');
+        
+        const defaultMatch = /DEFAULT\s+(.*?)(?:\s+|$)/i.exec(constraintText);
+        if (defaultMatch) {
+          defaultValue = defaultMatch[1].trim();
+          if ((defaultValue.startsWith("'") && defaultValue.endsWith("'")) ||
+              (defaultValue.startsWith('"') && defaultValue.endsWith('"'))) {
+            defaultValue = defaultValue.substring(1, defaultValue.length - 1);
           }
+        }
+        
+        // Check for inline foreign key references
+        let foreignKey = null;
+        const directRefMatch = /\bREFERENCES\s+(?:`|"|')?([^`"'(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
+        
+        if (directRefMatch) {
+          const targetTable = directRefMatch[1].trim().replace(/^["'`]|["'`]$/g, '');
+          const targetColumn = directRefMatch[2] ? directRefMatch[2].trim().replace(/^["'`]|["'`]$/g, '') : 'id';
           
-          let defaultValue = null;
+          foreignKey = { table: targetTable, row: targetColumn };
           
-          // Process constraints
-          if (constraintText.toUpperCase().includes('PRIMARY KEY')) constraints.push('primary');
-          if (constraintText.toUpperCase().includes('NOT NULL')) constraints.push('notnull');
-          if (constraintText.toUpperCase().includes('UNIQUE')) constraints.push('unique');
-          
-          // Extract DEFAULT value
-          const defaultMatch = /DEFAULT\s+(.*?)(?:\s+|$)/i.exec(constraintText);
-          if (defaultMatch) {
-            defaultValue = defaultMatch[1].trim();
-            // If default value is quoted, clean it up
-            if ((defaultValue.startsWith("'") && defaultValue.endsWith("'")) ||
-                (defaultValue.startsWith('"') && defaultValue.endsWith('"'))) {
-              defaultValue = defaultValue.substring(1, defaultValue.length - 1);
-            }
-          }
-          
-          // Define foreignKey variable
-          let foreignKey = null;
-          
-          // IMPROVED: Check for inline REFERENCES constraint in column definition
-          // This specifically targets patterns like: "id" uuid NOT NULL REFERENCES "New Table_1"("id")
-          
-          // First try specific format from the example
-          const directRefMatch = /\bREFERENCES\s+(?:`|"|')?([^`"'(]+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/i.exec(constraintText);
-          
-          if (directRefMatch) {
-            const targetTable = directRefMatch[1].trim().replace(/^["'`]|["'`]$/g, '');
-            const targetColumn = directRefMatch[2] ? directRefMatch[2].trim().replace(/^["'`]|["'`]$/g, '') : 'id';
-            
-            console.log(`Found inline reference in column: ${rowName} -> ${targetTable}(${targetColumn})`);
-            
-            foreignKey = {
-              table: targetTable,
-              row: targetColumn
-            };
-            
-            // Add to pending foreign keys for processing in second pass
-            pendingForeignKeys.push({
-              sourceNodeId: nodeId,
-              sourceColumn: rowName,
-              targetTable: targetTable, 
-              targetColumn: targetColumn,
-              relationshipId: createRelationshipId(tableName, rowName, targetTable, targetColumn),
-              sourceTable: tableName
-            });
-          }
-          
-          // Handle duplicate row names
-          if (rowNames.has(rowName.toLowerCase())) {
-            let suffix = 1;
-            let newName = `${rowName}_${suffix}`;
-            while (rowNames.has(newName.toLowerCase())) {
-              suffix++;
-              newName = `${rowName}_${suffix}`;
-            }
-            rowName = newName;
-          }
-          
-          rowNames.add(rowName.toLowerCase());
-          const rowId = `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          rowMap[normalizedName][rowName.toLowerCase()] = rowId;
-          
-          rows.push({
-            title: rowName,
-            type: rowType, // Now contains the full type with parameters
-            constraints,
-            id: rowId,
-            default: defaultValue,
-            foreignKey
+          pendingForeignKeys.push({
+            sourceNodeId: nodeId,
+            sourceColumn: rowName,
+            targetTable,
+            targetColumn,
+            relationshipId: createRelationshipId(tableName, rowName, targetTable, targetColumn),
+            sourceTable: tableName
           });
-          
-          // Process enum connections
-          if (isEnum) {
-            const enumNodeId = enumNodeMap[enumTypeName.toLowerCase()];
-            if (enumNodeId) {
-              // Create edge from enum node to this row
-              newEdges.push({
-                id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                source: enumNodeId,
-                target: nodeId,  // The table node
-                sourceHandle: `enum-source-${enumTypeName}`,
-                targetHandle: `target-${rowName}`,
-                type: 'smoothstep',
-                animated: true,
-                label: 'enum type',
-                style: { stroke: '#a855f7' },  // Purple color for enum connections
-                data: { connectionType: 'enum' }
-              });
-            }
+        }
+        
+        // Handle duplicate row names
+        if (rowNames.has(rowName.toLowerCase())) {
+          let suffix = 1;
+          let newName = `${rowName}_${suffix}`;
+          while (rowNames.has(newName.toLowerCase())) {
+            suffix++;
+            newName = `${rowName}_${suffix}`;
+          }
+          rowName = newName;
+        }
+        
+        rowNames.add(rowName.toLowerCase());
+        const rowId = `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        rowMap[normalizedName][rowName.toLowerCase()] = rowId;
+        
+        // Add row to table schema
+        rows.push({
+          title: rowName,
+          type: rowType,
+          constraints,
+          id: rowId,
+          default: defaultValue,
+          foreignKey
+        });
+        
+        // Create enum connection if applicable
+        if (isEnum) {
+          const enumNodeId = enumNodeMap[enumTypeName.toLowerCase()];
+          if (enumNodeId) {
+            newEdges.push({
+              id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              source: enumNodeId,
+              target: nodeId,
+              sourceHandle: `enum-source-${enumTypeName}`,
+              targetHandle: `target-${rowName}`,
+              type: 'smoothstep',
+              animated: true,
+              label: 'enum type',
+              style: { stroke: '#a855f7' },
+              data: { connectionType: 'enum' }
+            });
           }
         }
       }
       
+      // Create table node if it has rows
       if (rows.length > 0) {
-        // Check if this table already exists to preserve position and color
         const existingNode = existingNodesMap.get(normalizedName);
-        
-        // If node exists, use its position and color; otherwise use defaults
         const position = existingNode 
           ? existingNode.position 
           : { x: 100 + (tableIndex % 3) * 300, y: 100 + Math.floor(tableIndex / 3) * 200 };
         
-        // Preserve color if it exists
         const color = existingNode?.data?.color;
         
         newNodes.push({
           id: nodeId,
           type: 'databaseSchema',
-          position: position,
+          position,
           data: { 
-            label: originalName, // Use original table name to preserve case and spaces
+            label: originalName,
             schema: rows,
-            // Only include color if it was previously set
             ...(color && { color })
           }
         });
@@ -354,10 +312,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       }
     }
     
-    // SECOND PASS: Extract ALTER TABLE foreign key constraints
-    console.log("Parsing ALTER TABLE statements...");
-    
-    // IMPROVED: Enhanced regex that better handles spaces in table names
+    // STEP 3: Parse ALTER TABLE constraints
     const alterTableRegex = /ALTER\s+TABLE\s+(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+))\s+ADD\s+(?:CONSTRAINT\s+(?:`|"|')?([^`"'\s]+)(?:`|"|')?\s+)?FOREIGN\s+KEY\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)\s+REFERENCES\s+(?:`|"|')?([^`"']+)(?:`|"|')?\s*\(\s*(?:`|"|')?([^`"',\)]+)(?:`|"|')?\s*\)/gi;
     let alterMatch;
 
@@ -372,92 +327,102 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       
       if (!sourceColumn || !targetTable || !targetColumn) continue;
       
-      // Create a relationship ID for consistent tracking
+      // Create relationship ID and check for duplicates
       const relationshipId = createRelationshipId(sourceTable, sourceColumn, targetTable, targetColumn);
       
-      console.log(`Found ALTER TABLE FK: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
+      // Skip if constraint name or relationship already processed
+      if (constraintName && processedConstraints.has(constraintName.toLowerCase())) continue;
+      if (processedRelationships.has(relationshipId)) continue;
       
-      // Check if we've seen this constraint name before
-      if (constraintName && processedConstraints.has(constraintName.toLowerCase())) {
-        console.log(`Skipping duplicate constraint name: ${constraintName}`);
-        continue;
-      }
+      processedRelationships.add(relationshipId);
+      if (constraintName) processedConstraints.add(constraintName.toLowerCase());
       
-      // Only process if we haven't seen this relationship before
-      if (!processedRelationships.has(relationshipId)) {
-        processedRelationships.add(relationshipId);
-        
-        // If we have a constraint name, add it to processed constraints
-        if (constraintName) {
-          processedConstraints.add(constraintName.toLowerCase());
-        }
-        
-        // Look up table IDs with enhanced case-insensitive matching
-        // Try multiple possible versions of the table name
-        const sourceNodeId = findTableInMap(tableMap, sourceTable);
-        
-        if (sourceNodeId) {
-          pendingForeignKeys.push({
-            sourceNodeId,
-            sourceColumn,
-            targetTable,
-            targetColumn,
-            relationshipId,
-            sourceTable,
-            constraintName
-          });
-          
-          console.log(`Added FK from ALTER TABLE: ${sourceTable}(${sourceColumn}) -> ${targetTable}(${targetColumn})`);
-        } else {
-          console.warn(`Could not map source table to node: ${sourceTable}`);
-        }
-      } else {
-        console.log(`Skipping duplicate ALTER TABLE constraint: ${relationshipId}`);
+      // Add to pending foreign keys
+      const sourceNodeId = findTableInMap(tableMap, sourceTable);
+      if (sourceNodeId) {
+        pendingForeignKeys.push({
+          sourceNodeId,
+          sourceColumn,
+          targetTable,
+          targetColumn,
+          relationshipId,
+          sourceTable,
+          constraintName
+        });
       }
     }
     
-    // FINAL PASS: Process all pending foreign keys now that all tables are created
-    console.log(`Processing ${pendingForeignKeys.length} pending foreign key relationships`);
+    // STEP 4: Process all pending foreign keys to create edges
+    const processedEdgeMap = new Map();
     
-    // Deduplicate foreign keys by relationship ID to avoid duplicate edges
+    // Deduplicate foreign keys
     const uniqueForeignKeys = new Map<string, typeof pendingForeignKeys[0]>();
-    pendingForeignKeys.forEach(fk => {
-      uniqueForeignKeys.set(fk.relationshipId, fk);
-    });
+    pendingForeignKeys.forEach(fk => uniqueForeignKeys.set(fk.relationshipId, fk));
     
-    console.log(`After deduplication: ${uniqueForeignKeys.size} unique relationships`);
-    
-    // Create edges for each unique foreign key relationship
+    // Create edges
     for (const fk of uniqueForeignKeys.values()) {
-      // Look up target node ID with case-insensitive matching
       const targetNodeId = findTableInMap(tableMap, fk.targetTable);
+      if (!targetNodeId || !fk.sourceColumn || !fk.targetColumn) continue;
       
-      if (targetNodeId) {
-        const edge = createEdge(
-          fk.sourceNodeId,
-          targetNodeId,
-          fk.sourceColumn,
-          fk.targetColumn,
-          existingEdgesMap
-        );
+      // Create relationship key for lookup
+      const relationshipKey = `${fk.sourceTable.toLowerCase()}:${fk.sourceColumn.toLowerCase()}->${fk.targetTable.toLowerCase()}:${fk.targetColumn.toLowerCase()}`;
+      
+      // Skip duplicates
+      if (processedEdgeMap.has(relationshipKey)) continue;
+
+      try {
+        // Check if relationship already exists
+        const existingEdge = relationshipToEdgeMap.get(relationshipKey);
+        
+        let edge;
+        if (existingEdge) {
+          // Preserve existing edge properties
+          edge = createEdgeFromExisting(existingEdge, fk.sourceNodeId, targetNodeId, fk.sourceColumn, fk.targetColumn);
+        } else {
+          // Check for edge with matching node IDs as fallback
+          const sourceHandle = `source-${fk.sourceColumn}`;
+          const targetHandle = `target-${fk.targetColumn}`;
+          
+          // Try various key combinations
+          const possibleKeys = [
+            `${fk.sourceNodeId}:${sourceHandle}:${targetNodeId}:${targetHandle}`,
+          ];
+          
+          // Check old node IDs too
+          const oldSourceNodeId = tableNameToNodeIdMap[fk.sourceTable.toLowerCase()];
+          const oldTargetNodeId = tableNameToNodeIdMap[fk.targetTable.toLowerCase()];
+          
+          if (oldSourceNodeId && oldTargetNodeId) {
+            possibleKeys.push(`${oldSourceNodeId}:${sourceHandle}:${oldTargetNodeId}:${targetHandle}`);
+          }
+          
+          // Check for existing edge with any of these keys
+          let foundEdge = null;
+          for (const key of possibleKeys) {
+            if (existingEdgesMap.has(key)) {
+              foundEdge = existingEdgesMap.get(key);
+              break;
+            }
+          }
+          
+          edge = foundEdge 
+            ? createEdgeFromExisting(foundEdge, fk.sourceNodeId, targetNodeId, fk.sourceColumn, fk.targetColumn)
+            : createEdge(fk.sourceNodeId, targetNodeId, fk.sourceColumn, fk.targetColumn);
+        }
+        
+        processedEdgeMap.set(relationshipKey, edge);
         newEdges.push(edge);
-        console.log(`Created edge: ${fk.sourceTable}(${fk.sourceColumn}) -> ${fk.targetTable}(${fk.targetColumn})`);
-      } else {
-        console.warn(`Missing target table mapping for FK: ${fk.targetTable}`);
+      } catch (err) {
+        console.error(`Error creating edge:`, err);
       }
     }
 
-    // Final validation checks
+    // Basic validation
     if (!foundTables && sql.toUpperCase().includes('CREATE TABLE')) {
       throw new Error("SQL syntax appears to be invalid. Check for proper table definitions.");
     } else if (newNodes.length === 0) {
       throw new Error("No valid tables found in the SQL. Please check your syntax.");
     }
-    
-    // Before returning, log the complete list of edges for debugging
-    console.log(`Created ${newEdges.length} edges:`, newEdges.map(e => 
-      `${e.source}(${e.sourceHandle}) -> ${e.target}(${e.targetHandle})`
-    ));
     
     return { nodes: newNodes, edges: newEdges, enumTypes };
   } catch (error: any) {
@@ -466,79 +431,73 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
   }
 };
 
-// Helper to find a table in the tableMap with enhanced matching to handle spaces
+// Helper to find a table in the tableMap
 function findTableInMap(tableMap: Record<string, string>, tableName: string): string | undefined {
-  // First try exact match
-  if (tableMap[tableName]) {
-    return tableMap[tableName];
-  }
+  // Try exact match
+  if (tableMap[tableName]) return tableMap[tableName];
   
-  // Try with normalized name (lowercase, no quotes)
+  // Try normalized name
   const normalizedName = normalizeTableName(tableName);
-  if (tableMap[normalizedName]) {
-    return tableMap[normalizedName];
-  }
+  if (tableMap[normalizedName]) return tableMap[normalizedName];
   
-  // Try with spaces normalized to underscores
+  // Try with underscores instead of spaces
   const underscoreName = normalizedName.replace(/\s+/g, '_');
-  if (tableMap[underscoreName]) {
-    return tableMap[underscoreName];
-  }
+  if (tableMap[underscoreName]) return tableMap[underscoreName];
   
-  // Finally try case-insensitive search through all keys
+  // Check all keys with case-insensitive comparison
   for (const key in tableMap) {
-    if (normalizeTableName(key) === normalizedName) {
-      return tableMap[key];
-    }
+    if (normalizeTableName(key) === normalizedName) return tableMap[key];
   }
   
   return undefined;
 }
 
-// Keep the improved createEdge function
-function createEdge(sourceNodeId: string, targetNodeId: string, sourceColumn: string, targetColumn: string, existingEdgesMap?: Map<string, any>) {
-  const sourceHandle = `source-${sourceColumn}`;
-  const targetHandle = `target-${targetColumn}`;
-  const relationshipKey = `${sourceNodeId}:${sourceHandle}:${targetNodeId}:${targetHandle}`;
+// Create edge from existing edge, preserving properties
+function createEdgeFromExisting(
+  existingEdge: any,
+  sourceNodeId: string,
+  targetNodeId: string,
+  sourceColumn: string,
+  targetColumn: string
+): any {
+  // Deep copy to avoid reference issues
+  const newEdge = JSON.parse(JSON.stringify(existingEdge));
   
-  // For bi-directional checking, also create the reverse key
-  const reverseKey = `${targetNodeId}:target-${targetColumn}:${sourceNodeId}:source-${sourceColumn}`;
+  // Update only connection points
+  newEdge.id = `edge-${sourceNodeId}-${sourceColumn}-${targetNodeId}-${targetColumn}`;
+  newEdge.source = sourceNodeId;
+  newEdge.target = targetNodeId;
+  newEdge.sourceHandle = `source-${sourceColumn}`;
+  newEdge.targetHandle = `target-${targetColumn}`;
   
-  console.log(`Creating edge with key: ${relationshipKey}`);
+  // Ensure data contains column information
+  if (!newEdge.data) newEdge.data = {};
+  newEdge.data.sourceColumn = sourceColumn;
+  newEdge.data.targetColumn = targetColumn;
   
-  // Generate consistent ID based on the relationship - this ensures edges remain stable
+  return newEdge;
+}
+
+// Create new edge with default properties
+function createEdge(sourceNodeId: string, targetNodeId: string, sourceColumn: string, targetColumn: string) {
+  const sourceHandle = sourceColumn ? `source-${sourceColumn}` : null; 
+  const targetHandle = targetColumn ? `target-${targetColumn}` : null;
   const stableId = `edge-${sourceNodeId}-${sourceColumn}-${targetNodeId}-${targetColumn}`;
   
-  // Check if this edge already exists in either direction
-  const existingEdge = existingEdgesMap?.get(relationshipKey) || existingEdgesMap?.get(reverseKey);
-  
-  if (existingEdge) {
-    console.log(`Found existing edge, preserving properties: ${existingEdge.id}`);
-    return {
-      ...existingEdge,
-      // Ensure these core properties are correctly set
-      id: stableId, // Use stable ID for consistency 
-      source: sourceNodeId,
-      target: targetNodeId,
-      sourceHandle: sourceHandle,
-      targetHandle: targetHandle,
-    };
-  }
-  
-  // Create a new edge
   return {
     id: stableId,
     source: sourceNodeId,
     target: targetNodeId,
-    sourceHandle: sourceHandle,
-    targetHandle: targetHandle,
-    type: 'smoothstep',
-    animated: true,
+    sourceHandle,
+    targetHandle,
+    type: 'smoothstep', 
+    animated: false,
     label: `${sourceColumn} → ${targetColumn}`,
     data: { 
       relationshipType: 'oneToMany',
       sourceColumn,
-      targetColumn
+      targetColumn,
+      displayType: 'smoothstep'
     }
   };
 }

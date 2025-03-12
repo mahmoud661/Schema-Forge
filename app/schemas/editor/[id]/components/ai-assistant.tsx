@@ -312,6 +312,8 @@ REFERENCES ${targetNode.data.label.toLowerCase()}(${targetNode.data.schema[0].ti
       title="AI Assistant" 
       width={widths.ai}
       onWidthChange={(width) => updateWidth('ai', width)}
+      position="left" // Change to "right" to display on the right side
+
     >
       <div className="flex flex-col h-full">
         <div className="flex-1 overflow-auto p-4">

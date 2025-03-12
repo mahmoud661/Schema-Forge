@@ -13,11 +13,9 @@ interface EdgeStyleControlsProps {
 
 export function EdgeStyleControls({ 
   color, 
-  strokeWidth, 
   onColorChange, 
   onColorComplete, 
-  onManualColorInput,
-  onStrokeWidthChange
+  onManualColorInput
 }: EdgeStyleControlsProps) {
   return (
     <>
@@ -39,16 +37,7 @@ export function EdgeStyleControls({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Stroke Width</Label>
-        <Input 
-          type="number"
-          min="1"
-          max="10"
-          value={strokeWidth}
-          onChange={(e) => onStrokeWidthChange('strokeWidth', e.target.value)}
-        />
-      </div>
+  
     </>
   );
 }

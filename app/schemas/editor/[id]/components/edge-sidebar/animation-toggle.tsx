@@ -15,7 +15,7 @@ export function AnimationToggle({ checked, onChange }: AnimationToggleProps) {
         checked={checked}
         onCheckedChange={onChange}
       />
-      <Label htmlFor="animated">Animated</Label>
+      <Label htmlFor="animated" className="cursor-pointer">Animated</Label>
     </div>
   );
 }

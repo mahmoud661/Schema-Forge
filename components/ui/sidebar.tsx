@@ -22,6 +22,7 @@ interface BaseSidebarProps {
   headerActions?: React.ReactNode;
   bordered?: boolean;
   collapsible?: boolean;
+  position?: "left" | "right"; // New prop to specify position
 }
 
 export function BaseSidebar({
@@ -40,6 +41,7 @@ export function BaseSidebar({
   headerActions,
   bordered = true,
   collapsible = true,
+  position = "right", // Default to right position
 }: BaseSidebarProps) {
   // Use external width if provided, otherwise use internal state
   const [internalWidth, setInternalWidth] = useState(defaultWidth);
@@ -73,9 +75,17 @@ export function BaseSidebar({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
       
-      // Calculate new width directly without state updates for better performance
-      const deltaX = e.clientX - dragStartX.current;
-      const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
+      // Calculate new width based on position
+      let newWidth;
+      if (position === "left") {
+        // For left sidebar, width increases when dragging right
+        const deltaX = e.clientX - dragStartX.current;
+        newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
+      } else {
+        // For right sidebar - FIX: when dragging left (clientX decreases), width should increase
+        const deltaX = dragStartX.current - e.clientX;
+        newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
+      }
       
       // Apply width directly to the DOM for immediate feedback
       if (sidebarRef.current) {
@@ -84,7 +94,11 @@ export function BaseSidebar({
       
       // Also update button position immediately
       if (buttonRef.current && !isCollapsed) {
-        buttonRef.current.style.left = `${newWidth - 12}px`;
+        if (position === "left") {
+          buttonRef.current.style.left = `${newWidth - 12}px`;
+        } else {
+          buttonRef.current.style.right = `${newWidth - 12}px`;
+        }
       }
       
       // We'll still update state but less frequently
@@ -127,7 +141,7 @@ export function BaseSidebar({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, minWidth, maxWidth, onWidthChange, sidebarWidth, isCollapsed]);
+  }, [isDragging, minWidth, maxWidth, onWidthChange, sidebarWidth, isCollapsed, position]);
   
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
@@ -150,7 +164,8 @@ export function BaseSidebar({
           >
             <div className={cn(
               "flex-1 bg-background flex flex-col h-full overflow-hidden",
-              bordered && "border-r",
+              position === "left" ? "border-r" : "border-l",
+              bordered && (position === "left" ? "border-r" : "border-l"),
               className
             )}>
               {title && (
@@ -178,15 +193,19 @@ export function BaseSidebar({
               </div>
             </div>
             
-            {/* Resize handle - wider hit area for better UX */}
+            {/* Resize handle - positioned based on sidebar position */}
             <div 
               className={cn(
-                "w-2 hover:bg-primary/30 active:bg-primary/50 transition-colors absolute right-0 top-0 bottom-0 cursor-col-resize",
-                isDragging && "bg-primary/50" // Visual feedback during dragging
+                "w-2 hover:bg-primary/30 active:bg-primary/50 transition-colors absolute top-0 bottom-0 cursor-col-resize",
+                isDragging && "bg-primary/50",
+                position === "left" ? "right-0" : "left-0"
               )}
               onMouseDown={handleMouseDown}
             >
-              <div className="absolute top-1/2 -right-3 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-70">
+              <div className={cn(
+                "absolute top-1/2 transform -translate-y-1/2 w-6 h-10 flex items-center justify-center opacity-0 hover:opacity-70",
+                position === "left" ? "-right-3" : "-left-3"
+              )}>
                 <GripVertical className="h-5 w-5" />
               </div>
             </div>
@@ -197,7 +216,7 @@ export function BaseSidebar({
         )}
       </AnimatePresence>
       
-      {/* Collapse/Expand Button - Now with no transition during dragging */}
+      {/* Collapse/Expand Button - positioned based on sidebar position */}
       <div 
         ref={buttonRef}
         className={cn(
@@ -205,7 +224,7 @@ export function BaseSidebar({
           !isDragging && "transition-all duration-200" // Only apply transition when not dragging
         )}
         style={{
-          left: isCollapsed ? '2px' : `${sidebarWidth - 12}px`
+          [position === "left" ? "left" : "right"]: isCollapsed ? '2px' : `${sidebarWidth - 12}px`
         }}
       >
         <Button 
@@ -214,11 +233,10 @@ export function BaseSidebar({
           className="h-6 w-6 rounded-full shadow-md"
           onClick={toggleCollapse}
         >
-          {isCollapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" />
-          )}
+          {isCollapsed ? 
+            (position === "left" ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />) : 
+            (position === "left" ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)
+          }
         </Button>
       </div>
     </div>

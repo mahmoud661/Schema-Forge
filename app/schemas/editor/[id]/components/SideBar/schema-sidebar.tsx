@@ -261,6 +261,8 @@ export function Sidebar() {
       width={widths.schema}
       onWidthChange={(width) => updateWidth('schema', width)}
       collapsible={true}
+      position="left" // Change to "right" to display on the right side
+
     >
       <div className="flex flex-col h-full overflow-hidden">
         {/* Draggable Elements */}
