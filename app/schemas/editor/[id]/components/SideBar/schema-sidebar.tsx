@@ -61,7 +61,7 @@ export function Sidebar() {
   );
   
   const enumOperations = useEnumOperations(
-    selectedNode?.type === 'enumType' ? selectedNode as EnumTypeNode : null,
+    selectedNode?.type === 'enumType' ? (selectedNode as unknown as EnumTypeNode) : null,
     (data) => {
       if (selectedNode) {
         updateNodeDataInStore(selectedNode.id, data);

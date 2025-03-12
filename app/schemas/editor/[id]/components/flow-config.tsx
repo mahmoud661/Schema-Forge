@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import { ReactFlow } from "@xyflow/react";
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
-import { FlowControls } from "./flow-controls";
+import { FlowControls } from "./schemaFlow/flow-controls";
 import { useSchemaStore } from "@/hooks/use-schema";
 
 const nodeTypes = {

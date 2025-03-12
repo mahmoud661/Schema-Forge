@@ -84,6 +84,7 @@ export function AiAssistant({ onApplySuggestion }: AiAssistantProps) {
         type: 'databaseSchema',
         position: { x: 100, y: 100 },
         data: {
+          id: `data-${tableName.toLowerCase()}-${Date.now()}`, // <-- Added missing id property
           label: tableName,
           schema: [
             { title: "id", type: "uuid", constraints: ["primary", "notnull"], id: `row-${Date.now()}-1` },

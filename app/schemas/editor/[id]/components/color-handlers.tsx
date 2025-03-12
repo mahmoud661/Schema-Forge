@@ -5,7 +5,7 @@ export function useColorHandlers(updateNodeData: (nodeId: string, data: any) => 
   const handleColorUpdate = useCallback((nodeId: string, color: any) => {
     // Find the node element in ReactFlow
     const nodeElement = document.querySelector(`[data-id="${nodeId}"] .node-header`);
-    if (nodeElement) {
+    if (nodeElement instanceof HTMLElement) {
       // Directly update DOM style for instant feedback
       const isDarkMode = document.documentElement.classList.contains('dark');
       nodeElement.setAttribute('style', `
@@ -22,7 +22,7 @@ export function useColorHandlers(updateNodeData: (nodeId: string, data: any) => 
   const handleBorderColorUpdate = useCallback((nodeId: string, color: any) => {
     // Find the node element in ReactFlow
     const nodeElement = document.querySelector(`[data-id="${nodeId}"] .node-header`);
-    if (nodeElement) {
+    if (nodeElement instanceof HTMLElement) {
       // Directly update only the border style for instant feedback
       nodeElement.style.borderBottom = `3px solid ${color.border}`;
     }
