@@ -23,7 +23,6 @@ import {
 import { DraggableElements } from "./schema/draggable-elements";
 import { TablesList } from "./schema/tables-list";
 import { ColumnEditor } from "./row-editor";
-import { EnumEditor } from "./schema/enum-editor";
 import { useTableOperations } from "@/hooks/use-table-operations";
 import { useEnumOperations } from "@/hooks/use-enum-operations";
 import { toast } from "sonner";
