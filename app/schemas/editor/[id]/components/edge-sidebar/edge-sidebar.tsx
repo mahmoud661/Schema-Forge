@@ -136,7 +136,8 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
     handleColorComplete,
     handleManualColorInput,
     handleStyleChange,
-    getRelationshipType
+    getRelationshipType,
+    localRelationshipType  // new
   } = useEdgeUpdater(selectedEdge, onUpdateEdge, sourceNode, targetNode, sourceColumn, targetColumn);
 
   return (
@@ -175,7 +176,7 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
               />
 
               <RelationshipTypeSelector
-                selectedType={selectedEdge.data?.relationshipType || getRelationshipType()}
+                selectedType={localRelationshipType}
                 onTypeChange={handleRelationshipTypeChange}
               />
 
