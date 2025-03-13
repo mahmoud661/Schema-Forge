@@ -491,3 +491,14 @@ export const generateSql = (
   
   return sql;
 };
+
+function getFormattedIdentifier(identifier: string, caseSensitive: boolean): string {
+  // If case sensitive, always quote identifiers
+  if (caseSensitive) {
+    return `"${identifier}"`;
+  }
+  
+  // If case insensitive, quote only if needed (contains special chars or spaces)
+  const needsQuoting = /[\s\W]/.test(identifier);
+  return needsQuoting ? `"${identifier}"` : identifier;
+}

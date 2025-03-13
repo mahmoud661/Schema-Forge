@@ -1,25 +1,37 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { sql } from '@codemirror/lang-sql';
-import { vscodeDark } from '@uiw/codemirror-theme-vscode';
+import React, { useEffect, useState } from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import { sql } from "@codemirror/lang-sql";
+import { vscodeDark } from "@uiw/codemirror-theme-vscode";
+import { useSqlEditorStore } from "../../store/sql-editor-store";
 
 interface EditorComponentProps {
   isEditing: boolean;
   sqlCode: string;
   onChange?: (sql: string) => void;
-  isAiEditing?: boolean;
-  successAnimation?: boolean; // Add success animation
+  isAiEditing?: boolean; // Keep for backward compatibility
+  successAnimation?: boolean; // Keep for backward compatibility
+  debug?: boolean;
 }
 
-const EditorComponent = ({ 
-  isEditing, 
-  sqlCode, 
-  onChange, 
-  isAiEditing = false,
-  successAnimation = false
+const EditorComponent = ({
+  isEditing,
+  sqlCode,
+  onChange,
+  debug = true,
 }: EditorComponentProps) => {
+  // Get state directly from the store
+  const isAiEditing = useSqlEditorStore((state) => state.isAiEditing);
+  const successAnimation = useSqlEditorStore((state) => state.successAnimation);
+
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Debug logging for important state changes
+  useEffect(() => {
+    if (debug) {
+      console.log(`[SQL Editor Debug] isAiEditing changed to: ${isAiEditing}`);
+    }
+  }, [isAiEditing, debug]);
 
   // Handle success animation
   useEffect(() => {
@@ -37,7 +49,7 @@ const EditorComponent = ({
     syntaxHighlighting: true,
     bracketMatching: true,
   };
-  
+
   const editConfig = {
     ...editorConfig,
     highlightActiveLineGutter: true,
@@ -51,23 +63,9 @@ const EditorComponent = ({
     highlightSelectionMatches: true,
     indentUnit: 2,
   };
-  
+
   return (
     <div className="relative h-full">
-      {isAiEditing && (
-        <div className="absolute top-0 right-0 z-10 bg-violet-600/95 text-white px-3 py-1 rounded-bl-md flex items-center gap-1.5 text-xs font-medium">
-          <span className="inline-block h-2 w-2 bg-white rounded-full animate-pulse"></span>
-          AI is editing SQL...
-        </div>
-      )}
-      
-      {showSuccess && (
-        <div className="absolute top-0 right-0 z-10 bg-green-600/95 text-white px-3 py-1 rounded-bl-md flex items-center gap-1.5 text-xs font-medium animate-fadeIn">
-          <span className="inline-block h-2 w-2 bg-white rounded-full"></span>
-          Schema Applied Successfully!
-        </div>
-      )}
-      
       <CodeMirror
         value={sqlCode}
         onChange={isEditing ? onChange : undefined}
@@ -76,7 +74,9 @@ const EditorComponent = ({
         theme={vscodeDark}
         extensions={[sql()]}
         basicSetup={isEditing ? editConfig : editorConfig}
-        className={`h-full min-h-[500px] ${isAiEditing ? 'ai-editing-border' : ''} ${showSuccess ? 'success-border' : ''}`}
+        className={`h-full min-h-[500px] ${
+          isAiEditing ? "ai-editing-border" : ""
+        } ${showSuccess ? "success-border" : ""}`}
       />
     </div>
   );

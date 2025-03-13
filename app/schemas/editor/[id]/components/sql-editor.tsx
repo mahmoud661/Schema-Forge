@@ -1,20 +1,29 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { BaseSidebar } from "@/components/ui/sidebar";
 import { useSidebarStore } from "../store/sidebar-store";
 import { useSqlEditor } from "./SQL-Editor/hooks/use-sql-editor";
 import { SqlEditorHeader } from "./SQL-Editor/components/sql-editor-header";
 import { SqlEditorContent } from "./SQL-Editor/components/sql-editor-content";
+import { useSqlEditorStore } from "../store/sql-editor-store";
 
 // Main SQL Editor Component
 export function SqlEditor() {
   const { widths, updateWidth } = useSidebarStore();
   const sqlEditor = useSqlEditor();
   
+  // Get isAiEditing directly from the store
+  const isAiEditing = useSqlEditorStore(state => state.isAiEditing);
+  
+  // Add debug logging for isAiEditing changes
+  useEffect(() => {
+    console.log(`[Main SqlEditor] isAiEditing state: ${isAiEditing}`);
+  }, [isAiEditing]);
+  
   return (
     <BaseSidebar 
-      title={sqlEditor.isAiEditing ? "SQL Editor (AI Editing)" : "SQL Editor"}
+      title={isAiEditing ? "SQL Editor (AI Editing)" : "SQL Editor"}
       width={widths.sql}
       onWidthChange={(width) => updateWidth('sql', width)}
       maxWidth={800}
@@ -33,7 +42,7 @@ export function SqlEditor() {
           handleToggleCaseSensitive={sqlEditor.handleToggleCaseSensitive}
           handleToggleInlineConstraints={sqlEditor.handleToggleInlineConstraints}
           enumTypes={sqlEditor.enumTypes}
-          isAiEditing={sqlEditor.isAiEditing}
+          isAiEditing={isAiEditing}
         />
       }
       headerClassName="p-4"
@@ -46,8 +55,6 @@ export function SqlEditor() {
         sqlCode={sqlEditor.sqlCode}
         editingSqlCode={sqlEditor.editingSqlCode}
         setEditingSqlCode={sqlEditor.setEditingSqlCode}
-        isAiEditing={sqlEditor.isAiEditing}
-        successAnimation={sqlEditor.successAnimation}
       />
     </BaseSidebar>
   );

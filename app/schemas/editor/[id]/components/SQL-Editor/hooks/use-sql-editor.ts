@@ -5,6 +5,7 @@ import { validateSqlSyntax, fixCommonSqlIssues } from "../sql-validation";
 import { parseSqlToSchema } from "../sqlParser";
 import { ensureTableNamesAreQuoted, removeDuplicateAlterTableStatements } from "../utils/sql-utils";
 import { showToast } from "@/components/ui/toast-notification";
+import { useSqlEditorStore } from '../../../store/sql-editor-store';
 
 export interface SqlEditorSettings {
   caseSensitiveIdentifiers: boolean;
@@ -12,17 +13,55 @@ export interface SqlEditorSettings {
 }
 
 export function useSqlEditor() {
+  // Use the Zustand store for state management
+  const {
+    isAiEditing,
+    successAnimation,
+    error,
+    setEditingSqlCode: storeSetEditingSqlCode,
+    setIsEditing,
+    startAiEditing: storeStartAiEditing,
+    finishAiEditing: storeFinishAiEditing,
+    setError,
+    setSqlCode: storeSetSqlCode
+  } = useSqlEditorStore();
+  
+  // Get SQL from the main schema store - this is the source of truth
   const { schema, updateSchema, updateCode } = useSchemaStore();
-  const { nodes, edges, sqlCode, settings, enumTypes } = schema;
-
+  const { nodes, edges, settings, enumTypes } = schema;
+  
+  // Get the real SQL code from the schema store
+  const sqlCode = schema.sqlCode;
+  
+  // Sync the SQL code from schema store to our SQL editor store
+  useEffect(() => {
+    storeSetSqlCode(sqlCode);
+  }, [sqlCode, storeSetSqlCode]);
+  
+  // Get editingSqlCode from the store
+  const editingSqlCode = useSqlEditorStore(state => state.editingSqlCode);
+  
+  // Get isEditing from the store
+  const isEditing = useSqlEditorStore(state => state.isEditing);
+  
+  // Define setIsAiEditing function to handle AI editing state
+  const setIsAiEditing = useCallback((value: boolean) => {
+    console.log(`[SQL Editor Hook] Setting isAiEditing to: ${value}`);
+    if (value) {
+      storeStartAiEditing();
+    } else {
+      storeFinishAiEditing(false);
+    }
+  }, [storeStartAiEditing, storeFinishAiEditing]);
+  
+  // Create a function to set editingSqlCode that updates both stores
+  const setEditingSqlCode = useCallback((code: string) => {
+    storeSetEditingSqlCode(code);
+  }, [storeSetEditingSqlCode]);
+  
   // Internal state for the editor
   const [dbType, setDbType] = useState("postgresql");
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingSqlCode, setEditingSqlCode] = useState("");
   const [liveEditMode, setLiveEditMode] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isAiEditing, setIsAiEditing] = useState(false);
-  const [successAnimation, setSuccessAnimation] = useState<boolean>(false);
   
   // Update SQL from schema when database type changes or schema changes
   useEffect(() => {
@@ -91,9 +130,8 @@ export function useSqlEditor() {
           ...(parsedSchema.enumTypes ? { enumTypes: parsedSchema.enumTypes } : {})
         });
         
-        // Show success animation
-        setSuccessAnimation(true);
-        setTimeout(() => setSuccessAnimation(false), 1500);
+        // Show success animation in the store
+        storeFinishAiEditing(true);
         
         // Show success toast with counts
         showToast({
@@ -120,7 +158,7 @@ export function useSqlEditor() {
         type: 'error'
       });
     }
-  }, [editingSqlCode, liveEditMode, updateSchema]);
+  }, [editingSqlCode, liveEditMode, updateSchema, setError, setIsEditing, storeFinishAiEditing]);
 
   // Cancel editing
   const cancelEdit = () => {
@@ -142,13 +180,33 @@ export function useSqlEditor() {
 
   // Setting toggles
   const handleToggleCaseSensitive = useCallback(() => {
+    // Log the setting change
+    console.log(`[SQL Editor] Toggling case sensitivity from ${settings?.caseSensitiveIdentifiers} to ${!settings?.caseSensitiveIdentifiers}`);
+    
+    // Update schema settings
     updateSchema({
       settings: {
         ...settings,
-        caseSensitiveIdentifiers: !settings.caseSensitiveIdentifiers
+        caseSensitiveIdentifiers: !settings?.caseSensitiveIdentifiers
       }
     });
-  }, [settings, updateSchema]);
+    
+    // Force SQL regeneration if not in edit mode
+    if (!isEditing) {
+      const generatedSql = generateSql(
+        dbType, 
+        nodes, 
+        edges,
+        enumTypes,
+        { 
+          ...settings, 
+          caseSensitiveIdentifiers: !settings?.caseSensitiveIdentifiers 
+        }
+      );
+      updateCode(generatedSql);
+      storeSetSqlCode(generatedSql);
+    }
+  }, [settings, updateSchema, isEditing, dbType, nodes, edges, enumTypes, updateCode, storeSetSqlCode]);
 
   const handleToggleInlineConstraints = useCallback(() => {
     updateSchema({
@@ -167,7 +225,8 @@ export function useSqlEditor() {
     }
     
     // If we want animation/streaming effect
-    if (withAnimation) {
+    if (true) {
+      console.log("asndvaskjbdkajsndblkasd")
       // Set AI editing mode
       setIsAiEditing(true);
       
@@ -217,10 +276,12 @@ export function useSqlEditor() {
       setEditingSqlCode(suggestedSql);
       handleApplySqlChanges();
     }
-  }, [isEditing, handleApplySqlChanges]);
+  }, [isEditing, handleApplySqlChanges, setIsEditing, setIsAiEditing]);
 
   // Start direct AI editing mode with streaming content
   const startAiEditing = useCallback(() => {
+    console.log('[SQL Editor Debug] startAiEditing called, current isAiEditing:', isAiEditing);
+   
     // Switch to SQL tab
     const { updateActiveTab } = useSchemaStore.getState();
     updateActiveTab("sql");
@@ -229,7 +290,10 @@ export function useSqlEditor() {
     if (!isEditing) {
       setIsEditing(true);
     }
-    setIsAiEditing(true);
+    
+    // Set AI editing mode to true
+    console.log('[SQL Editor Debug] Setting isAiEditing to true');
+    storeStartAiEditing(); // Call the store function to set isAiEditing
     
     // Show toast notification
     showToast({
@@ -240,17 +304,20 @@ export function useSqlEditor() {
     
     let currentContent = "";
     
+    // Return the control interface
     return {
       updateStreamingContent: (contentOrFn: string | ((prev: string) => string)) => {
         if (typeof contentOrFn === 'function') {
-          currentContent = contentOrFn(currentContent);
+          const prevContent = useSqlEditorStore.getState().editingSqlCode;
+          const newContent = contentOrFn(prevContent);
+          setEditingSqlCode(newContent);
         } else {
-          currentContent = contentOrFn;
+          setEditingSqlCode(contentOrFn);
         }
-        setEditingSqlCode(currentContent);
       },
       finishEditing: () => {
-        setIsAiEditing(false);
+        console.log('[SQL Editor Debug] finishEditing called, setting isAiEditing to false');
+        storeFinishAiEditing(true); // Call the store function with success=true
         handleApplySqlChanges();
         
         showToast({
@@ -260,14 +327,29 @@ export function useSqlEditor() {
         });
       },
       cancel: () => {
-        setIsAiEditing(false);
+        console.log('[SQL Editor Debug] cancel called, setting isAiEditing to false');
+        storeFinishAiEditing(false); // Call the store function with success=false
         if (sqlCode) {
           setEditingSqlCode(sqlCode); // Restore original SQL
         }
         setError(null);
       }
     };
-  }, [isEditing, handleApplySqlChanges, sqlCode]);
+  }, [isEditing, handleApplySqlChanges, sqlCode, isAiEditing, setIsEditing, storeStartAiEditing, storeFinishAiEditing, setEditingSqlCode, setError]);
+
+  // When startAiEditing is called in the hook
+  const handleStartAiEditing = () => {
+    console.log('[SQL Editor Debug] handleStartAiEditing called, current isAiEditing:', isAiEditing);
+    // Call the store action directly instead of the local function
+    storeStartAiEditing();
+  };
+
+  // When finishEditing is called in the hook
+  const handleFinishEditing = (success = false) => {
+    console.log('[SQL Editor Debug] handleFinishEditing called, setting isAiEditing to false');
+    // Call the store action
+    storeFinishAiEditing(success);
+  };
 
   return {
     dbType,
@@ -294,6 +376,7 @@ export function useSqlEditor() {
     handleToggleCaseSensitive,
     handleToggleInlineConstraints,
     handleApplySqlSuggestion,
-    startAiEditing
+    startAiEditing,
+    finishEditing: (success = false) => storeFinishAiEditing(success),
   };
 }

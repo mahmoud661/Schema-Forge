@@ -1,5 +1,6 @@
 import React from "react";
 import EditorComponent from "../EditorComponent";
+import { useSqlEditorStore } from "../../../store/sql-editor-store";
 
 interface SqlEditorContentProps {
   error: string | null;
@@ -7,8 +8,8 @@ interface SqlEditorContentProps {
   sqlCode: string;
   editingSqlCode: string;
   setEditingSqlCode: (sql: string) => void;
-  isAiEditing?: boolean;
-  successAnimation?: boolean; // Add success animation prop
+  isAiEditing?: boolean; // Keep for backward compatibility
+  successAnimation?: boolean; // Keep for backward compatibility
 }
 
 export function SqlEditorContent({
@@ -17,9 +18,11 @@ export function SqlEditorContent({
   sqlCode,
   editingSqlCode,
   setEditingSqlCode,
-  isAiEditing = false,
-  successAnimation = false
 }: SqlEditorContentProps) {
+  // Get state directly from the store
+  const isAiEditing = useSqlEditorStore(state => state.isAiEditing);
+  const successAnimation = useSqlEditorStore(state => state.successAnimation);
+  
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {error && (
@@ -63,8 +66,6 @@ export function SqlEditorContent({
           isEditing={isEditing}
           sqlCode={isEditing ? editingSqlCode : sqlCode}
           onChange={isEditing ? setEditingSqlCode : undefined}
-          isAiEditing={isAiEditing}
-          successAnimation={successAnimation}
         />
       </div>
     </div>

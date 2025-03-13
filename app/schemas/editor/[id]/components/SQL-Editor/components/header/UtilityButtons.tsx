@@ -54,13 +54,7 @@ export function UtilityButtons({
   return (
     <TooltipProvider>
       <div className="flex items-center gap-2">
-        {!isEditing && (
-          <SqlPreview 
-            sqlCode={sqlCode} 
-            dbType={dbType} 
-            onApplySuggestion={handleApplySqlSuggestion} 
-          />
-        )}
+
         
         <Tooltip>
           <TooltipTrigger asChild>

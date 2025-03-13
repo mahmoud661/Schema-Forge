@@ -207,6 +207,8 @@ export function useGeminiAssistant() {
   
   // Helper function for schema generation requests
   const handleSchemaGeneration = async (prompt: string) => {
+    console.log('[AI Debug] Starting schema generation, requesting AI editing mode');
+    
     // First add a streaming message placeholder
     const streamingMsgId = `assistant-streaming-${Date.now()}`;
     const processingMessage: GeminiMessage = {
@@ -221,6 +223,7 @@ export function useGeminiAssistant() {
     
     // Start AI editing mode in SQL editor - get control interface
     const aiEditor = sqlEditor.startAiEditing();
+    console.log('[AI Debug] AI Editor interface received:', !!aiEditor);
     
     // Show active AI toast
     const dismissToast = showToast({
@@ -234,11 +237,13 @@ export function useGeminiAssistant() {
     let usedFallback = false;
     
     try {
+      console.log('[AI Debug] Starting schema stream generation');
       // Start streaming response with our improved streaming function
       const result = await streamSchemaFromDescription(
         prompt,
         // On each chunk
         (chunk) => {
+          console.log('[AI Debug] Received chunk, length:', chunk.length);
           // Update the SQL editor with chunk
           aiEditor.updateStreamingContent(prev => prev + chunk);
           
@@ -250,7 +255,9 @@ export function useGeminiAssistant() {
           ));
         },
         // On complete - nothing additional to do
-        () => {}
+        () => {
+          console.log('[AI Debug] Schema generation complete');
+        }
       );
       
       if (!result.success) {
@@ -260,6 +267,7 @@ export function useGeminiAssistant() {
       usedFallback = result.usingFallback || false;
       
       // Finish AI editing
+      console.log('[AI Debug] Finishing AI editing mode');
       aiEditor.finishEditing();
       
       // Clear the toast
@@ -349,8 +357,10 @@ export function useGeminiAssistant() {
         duration: 4000
       });
     } catch (error: any) {
+      console.error("[AI Debug] Schema generation error:", error);
       // Clean up
       dismissToast();
+      console.log('[AI Debug] Canceling AI editing mode due to error');
       aiEditor.cancel && aiEditor.cancel();
       
       // Handle schema generation error
