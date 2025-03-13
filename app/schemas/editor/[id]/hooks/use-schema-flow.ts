@@ -4,7 +4,7 @@ import { Connection, Edge, Node, useReactFlow } from "@xyflow/react";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { toast } from "sonner";
 import { debounce } from "lodash"; // You'll need to install lodash if not already
-
+import { NodeTypes } from "@xyflow/react";
 interface DuplicateColumnInfo {
   [rowName: string]: {
     isDuplicate: boolean;
@@ -50,13 +50,22 @@ export function useSchemaFlow() {
       const newDuplicateRows: Record<string, any> = {};
 
       // Only check database schema nodes
-      nodes.forEach((node) => {
+      interface Row {
+        title: string;
+      }
+
+      interface NodeData {
+        schema?: Row[];
+        label: string;
+      }
+
+      nodes.forEach((node: Node<NodeTypes>) => {
         if (node.data?.schema && Array.isArray(node.data.schema)) {
-          node.data.schema.forEach((row) => {
+          node.data.schema.forEach((row: Row) => {
             if (!rowMap[row.title]) {
               rowMap[row.title] = [];
             }
-            rowMap[row.title].push(node.data.label);
+            rowMap[row.title].push(String(node.data.label));
           });
         }
       });

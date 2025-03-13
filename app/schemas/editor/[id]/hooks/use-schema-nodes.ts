@@ -120,8 +120,8 @@ export function useSchemaNodes() {
             },
           };
           
-          // Update nodes in the flow
-          updateNodes([...schema.nodes, newEnumNode as EnumTypeNode]);
+          // Update nodes in the flow - cast enum node to SchemaNode
+          updateNodes([...schema.nodes, newEnumNode as unknown as SchemaNode]);
         } catch (error) {
           console.error("Error adding enum type:", error);
         }
@@ -170,16 +170,13 @@ export function useSchemaNodes() {
   const deleteNode = useCallback((node: SchemaNode | EnumTypeNode) => {
     if (!node) return false;
     
-    // Use the store's deleteNode function directly
-    const result = useSchemaStore.getState().deleteNode(node);
+    // Use the store's deleteNode function directly (assumes deletion is successful)
+    useSchemaStore.getState().deleteNode(node);
     
     // Show success toast if node was deleted
-    const wasDeleted = result !== false;
-    if (wasDeleted) {
-      toast.success(`Deleted ${node.type === 'enumType' ? 'ENUM type' : 'table'} successfully`);
-    }
+    toast.success(`Deleted ${node.type === 'enumType' ? 'ENUM type' : 'table'} successfully`);
     
-    return wasDeleted;
+    return true;
   }, []);
 
   return {

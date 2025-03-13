@@ -37,6 +37,7 @@ export function SqlEditor() {
       }
       headerClassName="p-4 flex-col gap-3 sm:flex-row"
       collapsible={true}
+      position="left" // Add this prop to specify it's on the right
     >
       <SqlEditorContent 
         error={sqlEditor.error}

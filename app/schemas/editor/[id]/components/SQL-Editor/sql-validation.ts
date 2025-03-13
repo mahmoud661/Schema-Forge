@@ -221,7 +221,7 @@ export function fixCommonSqlIssues(sql: string): string {
   
   // Don't add extra commas to section headers like "-- Foreign Key Constraints"
   const sectionHeaders = fixedSql.match(/--\s*[\w\s]+/g) || [];
-  const sectionHeaderMap = {};
+  const sectionHeaderMap: Record<string, string> = {}; // change made here
   
   // First, protect comments and ALTER TABLE statements from being modified
   sectionHeaders.forEach(header => {
@@ -232,7 +232,7 @@ export function fixCommonSqlIssues(sql: string): string {
   
   // Protect ALTER TABLE statements
   const alterTableStatements = fixedSql.match(/ALTER\s+TABLE[^;]+;/gi) || [];
-  const alterTableMap = {};
+  const alterTableMap: Record<string, string> = {}; // change made here
   
   alterTableStatements.forEach((statement) => {
     const placeholder = `__ALTER_TABLE_${Math.random().toString(36).substring(2)}__`;

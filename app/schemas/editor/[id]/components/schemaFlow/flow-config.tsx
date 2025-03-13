@@ -4,10 +4,15 @@ import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
 import { FlowControls } from "./flow-controls";
 import { useSchemaStore } from "@/hooks/use-schema";
+import { CustomEdge } from "@/components/ui/custom-edge";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
   enumType: EnumNode,
+};
+
+const edgeTypes = {
+  custom: CustomEdge,
 };
 
 interface FlowConfigProps {
@@ -42,7 +47,11 @@ export function FlowConfig({
     const edgeMap = new Map();
     storeEdges.forEach(edge => {
       if (!edgeMap.has(edge.id)) {
-        edgeMap.set(edge.id, edge);
+        // Set the custom edge type for all edges
+        edgeMap.set(edge.id, {
+          ...edge,
+          type: 'custom' // Use our custom edge type
+        });
       }
     });
     return Array.from(edgeMap.values());
@@ -82,6 +91,7 @@ export function FlowConfig({
         onNodesDelete={flowHooks.onNodeDelete}
         onEdgeClick={flowHooks.onEdgeClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onInit={onInit}
         fitView
         onDragOver={nodeHooks.onDragOver}
@@ -92,7 +102,7 @@ export function FlowConfig({
         snapToGrid={true}
         snapGrid={[15, 15]}
         defaultEdgeOptions={{
-          type: 'smoothstep',
+          type: 'custom',
           animated: true,
         }}
         // Performance settings

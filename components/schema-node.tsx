@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useState, useMemo, useRef } from "react";
+import { memo, useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { Position, Handle } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { themeAwareStringToColor } from "@/lib/utils";
@@ -22,7 +22,7 @@ const getHandleStyle = (type: 'source' | 'target', hasConstraints: boolean = fal
   background: type === 'source' ? (isDarkMode ? '#34d399' : '#10b981') : (isDarkMode ? '#60a5fa' : '#3b82f6'),
   border: `2px solid ${isDarkMode ? '#374151' : 'white'}`,
   boxShadow: isDarkMode 
-    ? `0 0 10px ${type === 'source' ? 'rgba(16, 185, 129, 0.6)' : 'rgba(59, 130, 246, 0.6)'}`
+    ? `0 0 10px ${type === 'source' ? 'rgba(16, 185, 129, 0.6)' : 'rgba(59, 130, 246, 0.6)'}` 
     : `0 0 10px ${type === 'source' ? 'rgba(16, 185, 129, 0.9)' : 'rgba(59, 130, 246, 0.9)'}`,
   opacity: hasConstraints ? 1 : 0.5,
 });
@@ -31,7 +31,7 @@ const getEnumHandleStyle = (isDarkMode: boolean = false) => ({
   background: isDarkMode ? '#a855f7' : '#9333ea', // Purple for enum handles
   border: `2px solid ${isDarkMode ? '#374151' : 'white'}`,
   boxShadow: isDarkMode 
-    ? `0 0 10px rgba(168, 85, 247, 0.6)`
+    ? `0 0 10px rgba(168, 85, 247, 0.6)` 
     : `0 0 10px rgba(168, 85, 247, 0.9)`,
   opacity: 1,
 });
@@ -41,9 +41,14 @@ interface DuplicateInfo {
   tables: string[];
 }
 
+// Update SchemaNodeData type to include _colorUpdated
+interface ExtendedSchemaNodeData extends SchemaNodeData {
+  _colorUpdated?: boolean;
+}
+
 const SchemaNode = memo(
   ({ data, selected, duplicateRows }: { 
-    data: SchemaNodeData; 
+    data: ExtendedSchemaNodeData; 
     selected?: boolean;
     duplicateRows?: Record<string, DuplicateInfo>;
   }) => {
@@ -72,7 +77,7 @@ const SchemaNode = memo(
         const header = nodeRef.current.querySelector('.node-header');
         if (header && data.color) {
           // Apply only border style for instant update
-          header.style.borderBottom = `3px solid ${data.color.border}`;
+          (header as HTMLElement).style.borderBottom = `3px solid ${data.color.border}`;
         }
       }
     }, [data._colorUpdated, mounted]);
@@ -215,38 +220,42 @@ const SchemaNode = memo(
       );
     }
     
-    // Use the memoized nodeStyle directly
+    // Use the memoized nodeStyle directly with a wrapping div to hold the ref
     return (
-      <DatabaseSchemaNode 
+      <div 
         ref={nodeRef}
-        className={`p-0 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md'}`} 
-        selected={selected}
+        className={`p-0 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md'}`}
       >
-        <DatabaseSchemaNodeHeader>
-          <div 
-            className="w-full rounded-t-md py-2 px-3 font-medium node-header bg-card"
-            style={nodeStyle}
-          >
-            {data.label}
-          </div>
-          <Handle
-            type="target"
-            position={Position.Top}
-            id={`table-${data.label}`}
-            className="!absolute transition-all duration-150"
-            style={{
-              ...getHandleStyle('target', true, isDarkMode),
-              top: -8,
-              opacity: 0.5,
-              width: '16px',
-              height: '16px',
-            }}
-          />
-        </DatabaseSchemaNodeHeader>
-        <DatabaseSchemaNodeBody>
-          {tableRows}
-        </DatabaseSchemaNodeBody>
-      </DatabaseSchemaNode>
+        <DatabaseSchemaNode 
+          className="p-0" 
+          selected={selected}
+        >
+          <DatabaseSchemaNodeHeader>
+            <div 
+              className="w-full rounded-t-md py-2 px-3 font-medium node-header bg-card"
+              style={nodeStyle}
+            >
+              {data.label}
+            </div>
+            <Handle
+              type="target"
+              position={Position.Top}
+              id={`table-${data.label}`}
+              className="!absolute transition-all duration-150"
+              style={{
+                ...getHandleStyle('target', true, isDarkMode),
+                top: -8,
+                opacity: 0.5,
+                width: '16px',
+                height: '16px',
+              }}
+            />
+          </DatabaseSchemaNodeHeader>
+          <DatabaseSchemaNodeBody>
+            {tableRows}
+          </DatabaseSchemaNodeBody>
+        </DatabaseSchemaNode>
+      </div>
     );
   },
   (prevProps, nextProps) => {
@@ -254,7 +263,8 @@ const SchemaNode = memo(
     if (prevProps.selected !== nextProps.selected) return false;
     
     // Fast path check for color-only changes
-    if (prevProps._colorUpdated !== nextProps._colorUpdated &&
+    if ((prevProps.data as ExtendedSchemaNodeData)._colorUpdated !== 
+        (nextProps.data as ExtendedSchemaNodeData)._colorUpdated &&
         prevProps.data.id === nextProps.data.id && 
         JSON.stringify(prevProps.data.color) !== JSON.stringify(nextProps.data.color)) {
       // Allow color updates but don't re-check the rest of the data
@@ -277,7 +287,8 @@ const SchemaNode = memo(
     if (prevDups !== nextDups) return false;
     
     // Skip detailed schema comparison if only color changed
-    if (prevProps._colorUpdated !== nextProps._colorUpdated) {
+    if ((prevProps.data as ExtendedSchemaNodeData)._colorUpdated !== 
+        (nextProps.data as ExtendedSchemaNodeData)._colorUpdated) {
       return true; // Schema didn't change, only color did
     }
     
