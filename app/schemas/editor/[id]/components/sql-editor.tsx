@@ -14,7 +14,7 @@ export function SqlEditor() {
   
   return (
     <BaseSidebar 
-      title="SQL Editor"
+      title={sqlEditor.isAiEditing ? "SQL Editor (AI Editing)" : "SQL Editor"}
       width={widths.sql}
       onWidthChange={(width) => updateWidth('sql', width)}
       maxWidth={800}
@@ -33,6 +33,7 @@ export function SqlEditor() {
           handleToggleCaseSensitive={sqlEditor.handleToggleCaseSensitive}
           handleToggleInlineConstraints={sqlEditor.handleToggleInlineConstraints}
           enumTypes={sqlEditor.enumTypes}
+          isAiEditing={sqlEditor.isAiEditing}
         />
       }
       headerClassName="p-4"
@@ -45,6 +46,8 @@ export function SqlEditor() {
         sqlCode={sqlEditor.sqlCode}
         editingSqlCode={sqlEditor.editingSqlCode}
         setEditingSqlCode={sqlEditor.setEditingSqlCode}
+        isAiEditing={sqlEditor.isAiEditing}
+        successAnimation={sqlEditor.successAnimation}
       />
     </BaseSidebar>
   );

@@ -7,6 +7,8 @@ interface SqlEditorContentProps {
   sqlCode: string;
   editingSqlCode: string;
   setEditingSqlCode: (sql: string) => void;
+  isAiEditing?: boolean;
+  successAnimation?: boolean; // Add success animation prop
 }
 
 export function SqlEditorContent({
@@ -14,7 +16,9 @@ export function SqlEditorContent({
   isEditing,
   sqlCode,
   editingSqlCode,
-  setEditingSqlCode
+  setEditingSqlCode,
+  isAiEditing = false,
+  successAnimation = false
 }: SqlEditorContentProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -29,11 +33,38 @@ export function SqlEditorContent({
         </div>
       )}
       
-      <div className="flex-1 h-full bg-muted/30 overflow-hidden">
+      {isAiEditing && !error && (
+        <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/30 text-violet-700 dark:text-violet-300 p-3 m-4 rounded-md flex items-center gap-2">
+          <div className="min-w-0">
+            <p className="font-medium">AI is generating SQL schema</p>
+            <p className="text-xs text-muted-foreground mt-0.5">The AI is creating SQL code based on your request. Please wait...</p>
+          </div>
+        </div>
+      )}
+      
+      {!isAiEditing && !error && successAnimation && (
+        <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 text-green-700 dark:text-green-300 p-3 m-4 rounded-md flex items-center gap-2 transition-opacity duration-1000 opacity-100">
+          <div className="min-w-0 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="font-medium">Schema Applied Successfully!</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The SQL has been parsed and applied to your database schema
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className={`flex-1 h-full bg-muted/30 overflow-hidden ${successAnimation ? 'success-flash' : ''}`}>
         <EditorComponent 
           isEditing={isEditing}
           sqlCode={isEditing ? editingSqlCode : sqlCode}
           onChange={isEditing ? setEditingSqlCode : undefined}
+          isAiEditing={isAiEditing}
+          successAnimation={successAnimation}
         />
       </div>
     </div>

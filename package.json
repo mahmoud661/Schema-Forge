@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@codemirror/lang-sql": "^6.8.0",
+    "@google/generative-ai": "^0.24.0",
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",

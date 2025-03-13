@@ -12,3 +12,8 @@ export interface SqlEditorState {
   error: string | null;
   liveEditMode: boolean;
 }
+
+export interface EnumType {
+  name: string;
+  values: string[];
+}

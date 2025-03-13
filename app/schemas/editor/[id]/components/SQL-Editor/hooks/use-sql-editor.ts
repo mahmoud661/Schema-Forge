@@ -1,250 +1,299 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { generateSql } from "../sqlGenerators";
+import { validateSqlSyntax, fixCommonSqlIssues } from "../sql-validation";
 import { parseSqlToSchema } from "../sqlParser";
-import { fixCommonSqlIssues } from "../sql-validation";
-import { toast } from "sonner";
-import { ensureTableNamesAreQuoted, removeDuplicateAlterTableStatements, defaultSettings } from "../utils/sql-utils";
-import { SchemaNode } from "@/app/schemas/editor/[id]/types/types";
-import { SqlEditorSettings } from "../types/types";
+import { ensureTableNamesAreQuoted, removeDuplicateAlterTableStatements } from "../utils/sql-utils";
+import { showToast } from "@/components/ui/toast-notification";
+
+export interface SqlEditorSettings {
+  caseSensitiveIdentifiers: boolean;
+  useInlineConstraints: boolean;
+}
 
 export function useSqlEditor() {
-  const { 
-    schema, 
-    updateNodes, 
-    updateEdges, 
-    updateCode, 
-    updateSettings,
-    updateSchema
-  } = useSchemaStore();
-  
-  // Safely access schema properties with defaults for new properties
-  const nodes = schema.nodes || [];
-  const edges = schema.edges || [];
-  const enumTypes = schema.enumTypes || [];
-  const settings = schema.settings || defaultSettings;
-  const sqlCode = schema.sqlCode || "";
-  
-  // State for SQL editor
-  const [dbType, setDbType] = useState<string>("postgresql");
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [editingSqlCode, setEditingSqlCode] = useState<string>("");
+  const { schema, updateSchema, updateCode } = useSchemaStore();
+  const { nodes, edges, sqlCode, settings, enumTypes } = schema;
+
+  // Internal state for the editor
+  const [dbType, setDbType] = useState("postgresql");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingSqlCode, setEditingSqlCode] = useState("");
+  const [liveEditMode, setLiveEditMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
+  const [isAiEditing, setIsAiEditing] = useState(false);
+  const [successAnimation, setSuccessAnimation] = useState<boolean>(false);
   
-  // Use a stable function reference for setDbType
-  const handleSetDbType = useCallback((type: string) => {
-    setDbType(type);
-  }, []);
-  
-  // On mount, initialize settings if they don't exist and generate SQL once
+  // Update SQL from schema when database type changes or schema changes
   useEffect(() => {
-    if (!schema.settings) {
-      updateSettings(defaultSettings);
+    if (!isEditing) {
+      const generatedSql = generateSql(
+        dbType, 
+        nodes, 
+        edges,
+        enumTypes,
+        settings
+      );
+      updateCode(generatedSql);
     }
-    
-    // Generate SQL once on component mount if empty
-    if (!sqlCode) {
-      const initialSql = generateSql(dbType, nodes, edges, enumTypes, settings);
-      updateCode(initialSql);
-    }
-  }, []);
-  
-  // When editing mode is activated, initialize the editing state with current SQL
+  }, [dbType, nodes, edges, enumTypes, settings, updateCode, isEditing]);
+
+  // Start editing
   useEffect(() => {
     if (isEditing) {
       setEditingSqlCode(sqlCode);
     }
   }, [isEditing, sqlCode]);
-  
-  // Regenerate SQL when db type changes
+
+  // Handle live edit mode
   useEffect(() => {
-    if (!isEditing) {
-      const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
-      updateCode(newSql);
+    if (isEditing && liveEditMode) {
+      const timer = setTimeout(() => {
+        handleApplySqlChanges();
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [dbType]);
-  
-  // Handle SQL updates when settings change
-  useEffect(() => {
-    if (!isEditing) {
-      const newSql = generateSql(dbType, nodes, edges, enumTypes, settings);
-      updateCode(newSql);
-    }
-  }, [settings.caseSensitiveIdentifiers, settings.useInlineConstraints]);
-  
-  // Effect for live updates when SQL changes
-  useEffect(() => {
-    if (isEditing && liveEditMode && editingSqlCode) {
-      handleApplySqlChangesInternal(editingSqlCode, true);
-    }
-  }, [editingSqlCode, liveEditMode, isEditing]);
+  }, [isEditing, liveEditMode, editingSqlCode]);
 
-  const handleToggleCaseSensitive = () => {
-    updateSettings({ 
-      ...settings,
-      caseSensitiveIdentifiers: !settings.caseSensitiveIdentifiers 
-    });
-    
-    if (isEditing) {
-      toast.info("Apply your changes to see updates with new settings", {
-        description: "Current edits are preserved until you apply them",
-        action: {
-          label: "Apply Now",
-          onClick: () => handleApplySqlChanges()
-        }
-      });
+  // Apply SQL changes to the schema
+  const handleApplySqlChanges = useCallback(() => {
+    if (!editingSqlCode.trim()) {
+      setError("SQL cannot be empty");
+      return;
     }
-  };
 
-  const handleToggleInlineConstraints = () => {
-    updateSettings({
-      ...settings,
-      useInlineConstraints: !settings.useInlineConstraints
-    });
-    
-    if (isEditing) {
-      toast.info("Apply your changes to see updates with new settings", {
-        description: "Current edits are preserved until you apply them",
-        action: {
-          label: "Apply Now",
-          onClick: () => handleApplySqlChanges()
-        }
-      });
-    }
-  };
-
-  const handleDownload = () => {
-    const blob = new Blob([sqlCode], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `schema_${dbType}_${new Date().toISOString().slice(0, 10)}.sql`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleUpdateSchema = (newNodes: SchemaNode[], newEdges: any[], newEnumTypes: any[] = []) => {
-    updateNodes(newNodes);
-    updateEdges(newEdges);
-    
-    if (newEnumTypes.length > 0) {
-      updateSchema({ enumTypes: newEnumTypes });
-    }
-  };
-
-  const handleApplySqlChangesInternal = (sql: string, isLiveUpdate = false) => {
     try {
-      setError(null);
-      if (!sql.trim()) {
-        setError("SQL cannot be empty");
-        return;
-      }
+      // Validate syntax
+      const validation = validateSqlSyntax(editingSqlCode);
       
-      let processedSql = sql;
-      if (!isLiveUpdate) {
-        // Fix table names with spaces by adding quotes if they're missing
-        processedSql = ensureTableNamesAreQuoted(processedSql);
-        
-        // Regular SQL fixes
-        const fixedSql = fixCommonSqlIssues(processedSql);
-        if (fixedSql !== processedSql) {
-          processedSql = fixedSql;
+      if (!validation.isValid) {
+        const criticalErrors = validation.errors.filter(err => !err.startsWith('Warning:'));
+        if (criticalErrors.length > 0) {
+          setError(`SQL has syntax errors: ${criticalErrors.join(', ')}`);
+          return;
         }
-        
-        // Remove duplicate ALTER TABLE statements
-        processedSql = removeDuplicateAlterTableStatements(processedSql);
       }
+
+      // Auto-fix common issues before parsing
+      const fixedSql = removeDuplicateAlterTableStatements(
+        ensureTableNamesAreQuoted(fixCommonSqlIssues(editingSqlCode))
+      );
       
-      try {
-        const parsedSchema = parseSqlToSchema(processedSql);
+      // Parse SQL back to schema
+      const parsedSchema = parseSqlToSchema(fixedSql);
+      
+      if (parsedSchema) {
+        // Update the schema with the parsed data
+        updateSchema({
+          nodes: parsedSchema.nodes || [],
+          edges: parsedSchema.edges || [],
+          sqlCode: fixedSql,
+          ...(parsedSchema.enumTypes ? { enumTypes: parsedSchema.enumTypes } : {})
+        });
         
-        if (parsedSchema) {
-          // Preserve node positions
-          const preservedNodes = parsedSchema.nodes.map(newNode => {
-            const existingNode = schema.nodes.find(n => n.id === newNode.id);
-            const existingNodeByLabel = !existingNode ? schema.nodes.find(n => 
-              n.data?.label && newNode.data?.label && 
-              n.data.label.toLowerCase() === newNode.data.label.toLowerCase()
-            ) : null;
-            
-            const nodeToPreserve = existingNode || existingNodeByLabel;
-            
-            if (nodeToPreserve && nodeToPreserve.position) {
-              return {
-                ...newNode,
-                position: nodeToPreserve.position,
-                style: nodeToPreserve.style,
-                data: {
-                  ...newNode.data,
-                  color: nodeToPreserve.data?.color || newNode.data?.color
-                }
-              };
-            }
-            
-            return newNode;
-          });
-          
-          // Update the schema with preserved nodes and unique edges
-          handleUpdateSchema(
-            preservedNodes,
-            parsedSchema.edges,
-            parsedSchema.enumTypes || []
-          );
-          
-          // Update the store with the processed SQL
-          updateCode(processedSql);
-          
-          if (!isLiveUpdate) {
-            toast.success("SQL changes applied successfully");
-            setIsEditing(false);
-          }
+        // Show success animation
+        setSuccessAnimation(true);
+        setTimeout(() => setSuccessAnimation(false), 1500);
+        
+        // Show success toast with counts
+        showToast({
+          title: "Schema Applied Successfully",
+          description: `Created ${parsedSchema.nodes?.length || 0} tables and ${
+            parsedSchema.edges?.length || 0
+          } relationships from SQL`,
+          type: 'success'
+        });
+        
+        // Clear error and exit edit mode if not in live edit
+        setError(null);
+        if (!liveEditMode) {
+          setIsEditing(false);
         }
-      } catch (parseError: any) {
-        console.error('SQL Parsing Error:', parseError);
-        setError(`Failed to parse SQL: ${parseError.message}`);
-        return;
+      } else {
+        setError("Failed to parse SQL schema");
       }
-    } catch (error: any) {
-      console.error('SQL Apply Error:', error);
-      setError(`Failed to apply SQL changes: ${error.message}`);
+    } catch (e: any) {
+      setError(`Error: ${e.message}`);
+      showToast({
+        title: "Error Applying Schema",
+        description: e.message,
+        type: 'error'
+      });
     }
-  };
+  }, [editingSqlCode, liveEditMode, updateSchema]);
 
-  const handleApplySqlChanges = () => {
-    handleApplySqlChangesInternal(editingSqlCode);
-  };
-
+  // Cancel editing
   const cancelEdit = () => {
     setIsEditing(false);
-    setEditingSqlCode("");
+    setEditingSqlCode(sqlCode);
     setError(null);
   };
 
+  // Download SQL
+  const handleDownload = () => {
+    const element = document.createElement("a");
+    const file = new Blob([sqlCode], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download = `schema_${dbType}_${new Date().toISOString().slice(0, 10)}.sql`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  // Setting toggles
+  const handleToggleCaseSensitive = useCallback(() => {
+    updateSchema({
+      settings: {
+        ...settings,
+        caseSensitiveIdentifiers: !settings.caseSensitiveIdentifiers
+      }
+    });
+  }, [settings, updateSchema]);
+
+  const handleToggleInlineConstraints = useCallback(() => {
+    updateSchema({
+      settings: {
+        ...settings,
+        useInlineConstraints: !settings.useInlineConstraints
+      }
+    });
+  }, [settings, updateSchema]);
+
+  // Apply AI suggestion to editor
+  const handleApplySqlSuggestion = useCallback((suggestedSql: string, withAnimation = true) => {
+    // Switch to edit mode if not already
+    if (!isEditing) {
+      setIsEditing(true);
+    }
+    
+    // If we want animation/streaming effect
+    if (withAnimation) {
+      // Set AI editing mode
+      setIsAiEditing(true);
+      
+      // Start with empty string if in streaming mode
+      setEditingSqlCode("");
+      
+      // Show initial toast
+      const loadingToast = showToast({
+        title: "Applying AI Schema",
+        description: "Generating your database schema in the editor...",
+        type: 'ai',
+        duration: 10000 // Longer timeout since we'll dismiss it manually
+      });
+      
+      // Split suggested SQL into chunks to simulate streaming
+      const segments = suggestedSql.match(/.{1,20}/g) || [];
+      let currentText = "";
+      
+      // Process each segment with a delay
+      segments.forEach((segment, index) => {
+        setTimeout(() => {
+          currentText += segment;
+          setEditingSqlCode(currentText);
+          
+          // When done, apply changes and exit AI editing mode
+          if (index === segments.length - 1) {
+            setTimeout(() => {
+              // Dismiss the loading toast
+              loadingToast();
+              
+              // Apply SQL and show results
+              handleApplySqlChanges();
+              setIsAiEditing(false);
+              
+              // Show completion toast
+              showToast({
+                title: "AI Schema Applied",
+                description: "SQL has been transformed into a visual database schema",
+                type: 'success',
+              });
+            }, 500);
+          }
+        }, index * 30); // 30ms between chunks
+      });
+    } else {
+      // No animation, just apply immediately
+      setEditingSqlCode(suggestedSql);
+      handleApplySqlChanges();
+    }
+  }, [isEditing, handleApplySqlChanges]);
+
+  // Start direct AI editing mode with streaming content
+  const startAiEditing = useCallback(() => {
+    // Switch to SQL tab
+    const { updateActiveTab } = useSchemaStore.getState();
+    updateActiveTab("sql");
+    
+    // Enable editing and AI mode
+    if (!isEditing) {
+      setIsEditing(true);
+    }
+    setIsAiEditing(true);
+    
+    // Show toast notification
+    showToast({
+      title: "AI SQL Generation",
+      description: "Creating SQL schema in the editor...",
+      type: 'ai',
+    });
+    
+    let currentContent = "";
+    
+    return {
+      updateStreamingContent: (contentOrFn: string | ((prev: string) => string)) => {
+        if (typeof contentOrFn === 'function') {
+          currentContent = contentOrFn(currentContent);
+        } else {
+          currentContent = contentOrFn;
+        }
+        setEditingSqlCode(currentContent);
+      },
+      finishEditing: () => {
+        setIsAiEditing(false);
+        handleApplySqlChanges();
+        
+        showToast({
+          title: "SQL Schema Generated",
+          description: "AI has completed generating your schema",
+          type: 'success',
+        });
+      },
+      cancel: () => {
+        setIsAiEditing(false);
+        if (sqlCode) {
+          setEditingSqlCode(sqlCode); // Restore original SQL
+        }
+        setError(null);
+      }
+    };
+  }, [isEditing, handleApplySqlChanges, sqlCode]);
+
   return {
-    // State
     dbType,
-    sqlCode,
+    setDbType,
     isEditing,
-    error,
-    liveEditMode,
-    settings,
-    enumTypes,
-    editingSqlCode,
-    
-    // State setters
-    setDbType: handleSetDbType,
-    setEditingSqlCode,
     setIsEditing,
+    liveEditMode,
     setLiveEditMode,
-    
-    // Actions
+    sqlCode,
+    editingSqlCode,
+    setEditingSqlCode,
+    error,
+    isAiEditing,
+    setIsAiEditing,
+    settings: {
+      caseSensitiveIdentifiers: settings?.caseSensitiveIdentifiers ?? false,
+      useInlineConstraints: settings?.useInlineConstraints ?? true
+    },
+    enumTypes,
+    successAnimation,
+    handleApplySqlChanges,
+    cancelEdit,
+    handleDownload,
     handleToggleCaseSensitive,
     handleToggleInlineConstraints,
-    handleDownload,
-    handleApplySqlChanges,
-    cancelEdit
+    handleApplySqlSuggestion,
+    startAiEditing
   };
 }
