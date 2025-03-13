@@ -45,8 +45,9 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     // Build node mapping for lookups
     allNodes.forEach(node => {
       if (node.type === 'databaseSchema' || !node.type) {
-        existingNodesMap.set(node.data.label.toLowerCase(), node);
-        tableNameToNodeIdMap[node.data.label.toLowerCase()] = node.id;
+        const label = (node.data.label as string) || '';
+        existingNodesMap.set(label.toLowerCase(), node);
+        tableNameToNodeIdMap[label.toLowerCase()] = node.id;
       }
     });
 
@@ -54,7 +55,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     const existingEnumMap = new Map();
     allNodes.forEach(node => {
       if (node.type === 'enumType') {
-        existingEnumMap.set(node.data.name.toLowerCase(), node);
+        const enumName = (node.data.name as string) || '';
+        existingEnumMap.set(enumName.toLowerCase(), node);
       }
     });
 
@@ -76,8 +78,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       const sourceNode = allNodes.find(n => n.id === edge.source);
       const targetNode = allNodes.find(n => n.id === edge.target);
       
-      if (sourceNode?.data?.label && targetNode?.data?.label && sourceColumn && targetColumn) {
-        const relationshipKey = `${sourceNode.data.label.toLowerCase()}:${sourceColumn.toLowerCase()}->${targetNode.data.label.toLowerCase()}:${targetColumn.toLowerCase()}`;
+      if (sourceNode?.data?.label && targetNode?.data?.label && sourceColumn && targetColumn) {    
+        const relationshipKey = `${(sourceNode.data.label as string).toLowerCase()}:${(sourceColumn as string).toLowerCase()}->${(targetNode.data.label as string).toLowerCase()}:${(targetColumn as string).toLowerCase()}`;
         relationshipToEdgeMap.set(relationshipKey, edge);
       }
     });
@@ -360,12 +362,12 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
     pendingForeignKeys.forEach(fk => uniqueForeignKeys.set(fk.relationshipId, fk));
     
     // Create edges
-    for (const fk of uniqueForeignKeys.values()) {
+    for (const fk of Array.from(uniqueForeignKeys.values())) {
       const targetNodeId = findTableInMap(tableMap, fk.targetTable);
       if (!targetNodeId || !fk.sourceColumn || !fk.targetColumn) continue;
       
       // Create relationship key for lookup
-      const relationshipKey = `${fk.sourceTable.toLowerCase()}:${fk.sourceColumn.toLowerCase()}->${fk.targetTable.toLowerCase()}:${fk.targetColumn.toLowerCase()}`;
+      const relationshipKey = `${(fk.sourceTable as string).toLowerCase()}:${(fk.sourceColumn as string).toLowerCase()}->${(fk.targetTable as string).toLowerCase()}:${(fk.targetColumn as string).toLowerCase()}`;
       
       // Skip duplicates
       if (processedEdgeMap.has(relationshipKey)) continue;

@@ -63,7 +63,11 @@ export const generateEnumTypes = (enumTypes: any[], useCaseSensitive: boolean = 
   let sql = '-- ENUM Type Definitions\n';
   enumTypes.forEach((enumType) => {
     const typeName = useCaseSensitive ? `"${enumType.name}"` : enumType.name;
-    const enumValues = enumType.values.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+    interface EnumType {
+      name: string;
+      values: string[];
+    }
+    const enumValues: string = (enumType as EnumType).values.map((v: string): string => `'${v.replace(/'/g, "''")}'`).join(', ');
     sql += `CREATE TYPE ${typeName} AS ENUM (${enumValues});\n\n`;
   });
   

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Table, KeyRound, Hash, Type, PaintBucket } from "lucide-react";
+import { Table, KeyRound, Hash, Type, PaintBucket, GripHorizontal, MoveIcon } from "lucide-react";
 import { SchemaNode, SchemaNodeData, EnumTypeNode } from "@/app/schemas/editor/[id]/types/types";
 import { BaseSidebar } from "../../../../../../components/ui/sidebar";
 import { useSidebarStore } from "@/app/schemas/editor/[id]/store/sidebar-store";
@@ -82,7 +82,7 @@ export function Sidebar() {
   };
   
   const handleAddEnumValue = (nodeId: string, value: string) => {
-    const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as EnumTypeNode;
+    const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as unknown as EnumTypeNode;
     if (enumNode) {
       // Check for duplicates
       if (enumNode.data.values.includes(value)) {
@@ -99,7 +99,7 @@ export function Sidebar() {
   };
   
   const handleRemoveEnumValue = (nodeId: string, value: string) => {
-    const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as EnumTypeNode;
+    const enumNode = nodes.find(node => node.id === nodeId && node.type === 'enumType') as unknown as EnumTypeNode;
     if (enumNode) {
       updateNodeDataInStore(nodeId, {
         values: enumNode.data.values.filter(v => v !== value)
@@ -128,9 +128,8 @@ export function Sidebar() {
     const colorVariants = generateColorVariants(color);
     
     // Use the super-fast direct DOM updater if available
-    if (typeof window !== 'undefined' && window.__schemaColorUpdater) {
-      // @ts-ignore - Using our global handler for performance
-      window.__schemaColorUpdater(nodeId, colorVariants);
+    if (typeof window !== 'undefined' && (window as any).__schemaColorUpdater) {
+      (window as any).__schemaColorUpdater(nodeId, colorVariants);
     } else {
       // Fall back to standard update
       updateNodeDataInStore(nodeId, { color: colorVariants });
@@ -148,9 +147,8 @@ export function Sidebar() {
     };
     
     // Use the super-fast direct DOM updater if available
-    if (typeof window !== 'undefined' && window.__schemaColorUpdater) {
-      // @ts-ignore - Using our global handler for performance
-      window.__schemaColorUpdater(nodeId, colorData);
+    if (typeof window !== 'undefined' && (window as any).__schemaColorUpdater) {
+      (window as any).__schemaColorUpdater(nodeId, colorData);
     } else {
       // Fall back to standard update
       updateNodeDataInStore(nodeId, { color: colorData });
@@ -158,12 +156,15 @@ export function Sidebar() {
   }, [updateNodeDataInStore]);
   
   const onNodeSelect = (node: SchemaNode | EnumTypeNode) => {
-    setSelectedNode(node);
+    setSelectedNode(node as SchemaNode);
   };
 
   // Render table content only when a table is selected
   const renderTableContent = (node: SchemaNode) => {
     if (!selectedNode || node.id !== selectedNode.id || selectedNode.type === 'enumType') return null;
+    
+    // Cast to SchemaNode since non-database schemas are filtered out
+    const validNode = selectedNode as SchemaNode;
     
     // Get current color values or defaults
     const defaultColor = {
@@ -172,8 +173,8 @@ export function Sidebar() {
       border: '#38bdf8'
     };
     
-    const tableColor = node.data?.color || defaultColor;
-    const isTableColorCustomized = !!node.data?.color;
+    const tableColor = validNode.data?.color || defaultColor;
+    const isTableColorCustomized = !!validNode.data?.color;
 
     return (
       <div className="px-3 py-3 space-y-3">
@@ -224,14 +225,17 @@ export function Sidebar() {
           </Accordion>
 
           {/* Row Editor */}
-          {selectedNode && selectedNode.data?.schema && (
+          {validNode.data?.schema && (
             <ColumnEditor 
-              rows={selectedNode.data.schema}
+              rows={validNode.data.schema?.map(row => ({
+                ...row,
+                constraints: row.constraints ?? []
+              })) || []}
               onAddColumn={tableOperations.addColumn}
               onUpdateColumn={tableOperations.updateColumn}
               onRemoveColumn={tableOperations.removeColumn}
               onToggleConstraint={tableOperations.toggleConstraint}
-              duplicateRows={duplicateRows && selectedNode.data?.label ? duplicateRows[selectedNode.data.label] : undefined}
+              duplicateRows={duplicateRows && validNode.data?.label ? duplicateRows[validNode.data.label] : undefined}
               dataTypes={dataTypes}
               constraints={constraints}
               enumTypes={enumTypes}
@@ -262,16 +266,20 @@ export function Sidebar() {
       onWidthChange={(width) => updateWidth('schema', width)}
       collapsible={true}
       position="left" // Change to "right" to display on the right side
-
     >
       <div className="flex flex-col h-full overflow-hidden">
         {/* Draggable Elements */}
         <div className="p-3 border-b">
+          <div className="text-xs text-muted-foreground mb-2 flex items-center">
+            <MoveIcon className="h-3 w-3 mr-1" />
+            <span>Drag elements onto the canvas</span>
+          </div>
           <DraggableElements />
         </div>
         
         {/* Scrollable Node List - Always render all nodes with key for better updates */}
         <div key={`sidebar-nodes-${nodes.length}`} className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+   
           <TablesList 
             nodes={nodes}
             selectedNode={selectedNode}
@@ -283,6 +291,7 @@ export function Sidebar() {
             onAddEnumValue={handleAddEnumValue}
             onRemoveEnumValue={handleRemoveEnumValue}
             enumTypes={enumTypes}
+            showDragHandles={true} // New prop to show drag handles in the TablesList
           />
         </div>
       </div>
@@ -290,7 +299,6 @@ export function Sidebar() {
   );
 }
 
-// The dataTypes and constraints arrays definitions remain unchanged
 const dataTypes = [
   { id: "uuid", label: "UUID", icon: KeyRound },
   { id: "varchar", label: "VARCHAR", icon: Type },

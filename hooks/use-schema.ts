@@ -2,8 +2,8 @@ import { SchemaNode } from "@/app/schemas/editor/[id]/types/types";
 import {
   Edge,
   Connection,
-  OnNodesChange,
-  OnEdgesChange,
+  NodeChange,
+  EdgeChange,
   applyNodeChanges,
   applyEdgeChanges,
 } from "@xyflow/react";
@@ -52,8 +52,8 @@ interface SchemaState {
   updateEnumType: (index: number, enumType: EnumType) => void;
   removeEnumType: (index: number) => void;
   resetSchema: () => void;
-  onNodesChange: (changes: OnNodesChange) => void;
-  onEdgesChange: (changes: OnEdgesChange) => void;
+  onNodesChange: (changes: NodeChange<SchemaNode>[]) => void;
+  onEdgesChange: (changes: EdgeChange<Edge>[]) => void;
   onConnect: (connection: Connection) => void;
   addNode: (node: SchemaNode) => void;
   updateEdge: (oldEdge: Edge, newConnection: Connection) => void;
@@ -96,15 +96,15 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
   updateSchema: (schemaData: Partial<SchemaState["schema"]>) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, ...schemaData },
-    }), false, "updateSchema"),
+    })),
   updateCode: (sqlCode: string) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, sqlCode },
-    }), false, "updateCode"),
+    })),
   updateNodes: (nodes: SchemaNode[]) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, nodes },
-    }), false, "updateNodes"),
+    })),
   updateEdges: (edges: Edge[]) =>
     set((state: SchemaState) => {
       const uniqueEdges = [];
@@ -118,11 +118,11 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
         }
       }
       return { schema: { ...state.schema, edges: uniqueEdges } };
-    }, false, "updateEdges"),
+    }),
   setSelectedNode: (selectedNode: SchemaNode | null) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, selectedNode } }), false, "setSelectedNode"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, selectedNode } })),
   setSelectedEdge: (selectedEdge: Edge | null) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, selectedEdge } }), false, "setSelectedEdge"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, selectedEdge } })),
   updateSelectedEdge: (data: Partial<Edge>) =>
     set((state: SchemaState) => {
       if (!state.schema.selectedEdge) return state;
@@ -135,7 +135,7 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
           ),
         },
       };
-    }, false, "updateSelectedEdge"),
+    }),
   updateNodeData: (nodeId: string, data: any) =>
     set((state: SchemaState) => {
       if (data.color !== undefined && Object.keys(data).length === 1) {
@@ -175,31 +175,31 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
             : state.schema.selectedNode,
         },
       };
-    }, false, "updateNodeData"),
+    }),
   updateActiveTab: (activeTab: string) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, activeTab } }), false, "updateActiveTab"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, activeTab } })),
   setDuplicateRows: (duplicateRows: Record<string, any>) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, duplicateRows } }), false, "setDuplicateRows"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, duplicateRows } })),
   updateSettings: (settings: Partial<SchemaState["schema"]["settings"]>) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, settings: { ...state.schema.settings, ...settings } } }), false, "updateSettings"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, settings: { ...state.schema.settings, ...settings } } })),
   addEnumType: (enumType: EnumType) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, enumTypes: [...(state.schema.enumTypes || []), enumType] },
-    }), false, "addEnumType"),
+    })),
   updateEnumType: (index: number, enumType: EnumType) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, enumTypes: state.schema.enumTypes.map((et: EnumType, i: number) => i === index ? enumType : et) },
-    }), false, "updateEnumType"),
+    })),
   removeEnumType: (index: number) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, enumTypes: state.schema.enumTypes.filter((_: EnumType, i: number) => i !== index) },
-    }), false, "removeEnumType"),
+    })),
   resetSchema: () =>
-    set({ schema: { ...initialSchema, enumTypes: [] } }, false, "resetSchema"),
-  onNodesChange: (changes: OnNodesChange) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: applyNodeChanges(changes, state.schema.nodes) } }), false, "onNodesChange"),
-  onEdgesChange: (changes: OnEdgesChange) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, edges: applyEdgeChanges(changes, state.schema.edges) } }), false, "onEdgesChange"),
+    set({ schema: { ...initialSchema, enumTypes: [] } }),
+  onNodesChange: (changes: NodeChange<SchemaNode>[]) =>
+    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: applyNodeChanges(changes, state.schema.nodes) } })),
+  onEdgesChange: (changes: EdgeChange<Edge>[]) =>
+    set((state: SchemaState) => ({ schema: { ...state.schema, edges: applyEdgeChanges(changes, state.schema.edges) } })),
   onConnect: (connection: Connection) =>
     set((state: SchemaState) => {
       const uniqueId = `e${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -215,13 +215,13 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
         return state;
       }
       return { schema: { ...state.schema, edges: [...state.schema.edges, newEdge] } };
-    }, false, "onConnect"),
+    }),
   addNode: (node: SchemaNode) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: [...state.schema.nodes, node] } }), false, "addNode"),
+    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: [...state.schema.nodes, node] } })),
   updateEdge: (oldEdge: Edge, newConnection: Connection) =>
     set((state: SchemaState) => ({
       schema: { ...state.schema, edges: state.schema.edges.map((edge: Edge) => edge.id === oldEdge.id ? { ...oldEdge, ...newConnection } : edge) },
-    }), false, "updateEdge"),
+    })),
   deleteNode: (node: SchemaNode | any) =>
     set((state: SchemaState) => {
       if (!node) return state;
@@ -258,7 +258,7 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
           enumTypes: updatedEnumTypes
         }
       };
-    }, false, "deleteNode")
+    })
 });
 
 const persistConfig: PersistOptions<SchemaState> = { name: "schema-storage" };

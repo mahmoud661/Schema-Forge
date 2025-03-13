@@ -17,6 +17,9 @@ import { EdgeStyleControls } from './edge-style-controls';
 import { EnumConnectionInfo } from "./enum-connection-info";
 import { useEdgeUpdater } from './use-edge-updater';
 
+// Add the following type alias to resolve the error
+type RelationshipType = string;
+
 interface EdgeSidebarProps {
   selectedEdge: Edge | null;
   onUpdateEdge: (edgeId: string, data: any) => void;
@@ -177,7 +180,7 @@ export function EdgeSidebar({ selectedEdge, onUpdateEdge, onClose }: EdgeSidebar
 
               <RelationshipTypeSelector
                 selectedType={localRelationshipType}
-                onTypeChange={handleRelationshipTypeChange}
+                onTypeChange={(type:any) => handleRelationshipTypeChange(type)}
               />
 
               <EdgeStyleControls

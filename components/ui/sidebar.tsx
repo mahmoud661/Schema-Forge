@@ -76,7 +76,7 @@ export function BaseSidebar({
       if (!isDragging) return;
       
       // Calculate new width based on position
-      let newWidth;
+      let newWidth: number;  // Add explicit type annotation
       if (position === "left") {
         // For left sidebar, width increases when dragging right
         const deltaX = e.clientX - dragStartX.current;

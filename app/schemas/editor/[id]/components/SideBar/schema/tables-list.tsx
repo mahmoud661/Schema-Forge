@@ -18,6 +18,7 @@ interface TablesListProps {
   onAddEnumValue?: (nodeId: string, value: string) => void;
   onRemoveEnumValue?: (nodeId: string, value: string) => void;
   enumTypes?: any[];
+  showDragHandles?: boolean; // Added new prop
 }
 
 export const TablesList: React.FC<TablesListProps> = ({

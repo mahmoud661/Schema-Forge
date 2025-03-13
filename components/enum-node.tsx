@@ -8,7 +8,7 @@ import { EnumNodeData } from "@/app/schemas/editor/[id]/types/types";
 
 interface EnumNodeProps extends NodeProps {
   data: EnumNodeData;
-  selected?: boolean;
+  selected: boolean; // Changed from selected?: boolean
 }
 
 const EnumNode = memo(({ data, selected }: EnumNodeProps) => {

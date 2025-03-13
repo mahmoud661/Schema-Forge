@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Edge } from "@xyflow/react";
 import { relationshipStyles, relationshipMarkers } from "@/components/ui/custom-edge";
 
+// Define allowed relationship types
+type RelationshipType = 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany' | 'enumType';
+
 export function useEdgeUpdater(
   selectedEdge: Edge,
   onUpdateEdge: (edgeId: string, data: any) => void,
@@ -16,9 +19,10 @@ export function useEdgeUpdater(
   );
   
   // Track current display type in local state to ensure UI updates
-  const [localDisplayType, setLocalDisplayType] = useState<string>(
-    selectedEdge.data?.displayType || 'smoothstep'
-  );
+  const initialDisplayType = typeof selectedEdge.data?.displayType === 'string' 
+    ? selectedEdge.data.displayType 
+    : 'smoothstep';
+  const [localDisplayType, setLocalDisplayType] = useState<string>(initialDisplayType);
 
   // Add local state for the label
   const [localLabel, setLocalLabel] = useState<string>(
@@ -34,7 +38,7 @@ export function useEdgeUpdater(
   const currentStrokeWidth = selectedEdge.style?.strokeWidth as number || 2;
 
   // Determine relationship type based on constraints
-  const getRelationshipType = useCallback(() => {
+  const getRelationshipType = useCallback((): RelationshipType => {
     if (!sourceNode || !targetNode || !sourceColumn || !targetColumn) {
       return 'oneToMany'; // default
     }
@@ -52,17 +56,25 @@ export function useEdgeUpdater(
   }, [sourceNode, targetNode, sourceColumn, targetColumn]);
 
   // Add local relationship type state
-  const [localRelationshipType, setLocalRelationshipType] = useState<string>(
-    selectedEdge.data?.relationshipType || getRelationshipType()
-  );
+  const initialRelationshipType: RelationshipType = 
+    typeof selectedEdge.data?.relationshipType === 'string'
+      ? selectedEdge.data.relationshipType as RelationshipType
+      : getRelationshipType();
+  const [localRelationshipType, setLocalRelationshipType] = useState<RelationshipType>(initialRelationshipType);
   
   // Update local states whenever selected edge changes
   useEffect(() => {
     setLocalColor((selectedEdge.style?.stroke as string) || '#3b82f6');
-    setLocalDisplayType(selectedEdge.data?.displayType || 'smoothstep');
+    setLocalDisplayType(typeof selectedEdge.data?.displayType === 'string' 
+      ? selectedEdge.data.displayType 
+      : 'smoothstep');
     setLocalLabel(typeof selectedEdge.label === 'string' ? selectedEdge.label : '');
     setLocalAnimated(selectedEdge.animated || false);
-    setLocalRelationshipType(selectedEdge.data?.relationshipType || getRelationshipType());
+    setLocalRelationshipType(
+      typeof selectedEdge.data?.relationshipType === 'string'
+        ? selectedEdge.data.relationshipType as RelationshipType
+        : getRelationshipType()
+    );
   }, [
     selectedEdge.id, 
     selectedEdge.style?.stroke, 
@@ -121,17 +133,17 @@ export function useEdgeUpdater(
   }, [selectedEdge, onUpdateEdge, localDisplayType, localLabel]);
 
   // Relationship type change handler
-  const handleRelationshipTypeChange = useCallback((value: string) => {
+  const handleRelationshipTypeChange = useCallback((value: RelationshipType) => {
     setLocalRelationshipType(value);
     const currentStyle = selectedEdge.style || {};
     
     const markers = value === 'enumType' ? 
       relationshipMarkers.enumType : 
-      relationshipMarkers[value];
+      relationshipMarkers[value as keyof typeof relationshipMarkers];
     
     const baseStyle = value === 'enumType' ? 
       relationshipStyles.enumType : 
-      relationshipStyles[value];
+      relationshipStyles[value as keyof typeof relationshipStyles];
       
     onUpdateEdge(selectedEdge.id, {
       ...selectedEdge,

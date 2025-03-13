@@ -57,7 +57,6 @@ export function CustomEdge({
   markerEnd,
   data,
   selected,
-  type,
   id,
   label,
 }: EdgeProps) {
@@ -123,8 +122,8 @@ export function CustomEdge({
     labelY = smoothLabelY;
   }
 
-  // Determine relationship type from data
-  const relationshipType = data?.relationshipType || 'oneToMany';
+  // Determine relationship type from data, cast to a key of relationshipStyles/relationshipMarkers
+  const relationshipType = (data?.relationshipType || 'oneToMany') as keyof typeof relationshipStyles;
   const isEnum = data?.connectionType === 'enum';
 
   // Get base style and markers for the relationship type
