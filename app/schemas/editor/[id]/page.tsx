@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import SchemaEditorClient from "./schema-editor-client";
+import { MobileWarning } from "@/components/mobile-warning";
 
 export const metadata: Metadata = {
   title: "Schema Editor - SchemaForge",
@@ -14,5 +15,10 @@ export const generateStaticParams = undefined;
 
 // This component will be rendered dynamically for each schema ID
 export default function SchemaEditorPage() {
-  return <SchemaEditorClient />;
+  return (
+    <>
+      <MobileWarning />
+      <SchemaEditorClient />
+    </>
+  );
 }

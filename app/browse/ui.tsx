@@ -308,59 +308,7 @@ export function BrowseUI() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          
-          <div className="flex gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortBy('modified')}
-                    className={sortBy === 'modified' ? 'border-primary text-primary' : ''}
-                    aria-label="Sort by last modified"
-                  >
-                    <Clock className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Sort by last modified</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortBy('created')}
-                    className={sortBy === 'created' ? 'border-primary text-primary' : ''}
-                    aria-label="Sort by date created"
-                  >
-                    <Calendar className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Sort by date created</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSortBy('name')}
-                    className={sortBy === 'name' ? 'border-primary text-primary' : ''}
-                    aria-label="Sort by name"
-                  >
-                    <FileJson className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Sort by name</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+        
         </div>
         
         {/* Tag filters */}
