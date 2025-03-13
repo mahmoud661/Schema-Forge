@@ -12,7 +12,7 @@ export const initGeminiAPI = (apiKey: string) => {
 };
 
 // Get or create model instance
-const getModel = (modelName = "gemini-1.5-flash") => {
+const getModel = (modelName = "gemini-2.0-flash") => {
   if (!genAI) {
     throw new Error("Gemini API not initialized. Call initGeminiAPI first");
   }
@@ -193,8 +193,8 @@ export const streamSchemaFromDescription = async (
   try {
     const model = getModel();
     const dbType = settings?.dbType || "postgresql";
-    const useCaseSensitiveIdentifiers = settings?.caseSensitiveIdentifiers || false;
-    const useInlineConstraints = settings?.useInlineConstraints !== undefined ? settings.useInlineConstraints : true;
+    const useCaseSensitiveIdentifiers = settings?.caseSensitiveIdentifiers || true;
+    const useInlineConstraints = settings?.useInlineConstraints !== undefined ? settings.useInlineConstraints : false;
     
     // Create identifiers based on settings
     const identifierExample = useCaseSensitiveIdentifiers ? 

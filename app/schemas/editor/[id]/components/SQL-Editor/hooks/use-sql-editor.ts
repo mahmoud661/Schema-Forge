@@ -65,8 +65,8 @@ export function useSqlEditor() {
   
   // Set default settings to match PostgreSQL format
   const defaultSettings = {
-    caseSensitiveIdentifiers: false,  // No quotes for regular identifiers
-    useInlineConstraints: true,       // Use inline REFERENCES syntax
+    caseSensitiveIdentifiers: true,  // No quotes for regular identifiers
+    useInlineConstraints: false,       // Use inline REFERENCES syntax
   };
 
   // Update SQL from schema when database type changes or schema changes
@@ -371,8 +371,8 @@ export function useSqlEditor() {
     isAiEditing,
     setIsAiEditing,
     settings: {
-      caseSensitiveIdentifiers: settings?.caseSensitiveIdentifiers ?? false,
-      useInlineConstraints: settings?.useInlineConstraints ?? true
+      caseSensitiveIdentifiers: settings?.caseSensitiveIdentifiers ?? true,
+      useInlineConstraints: settings?.useInlineConstraints ?? false
     },
     enumTypes,
     successAnimation,

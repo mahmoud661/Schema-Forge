@@ -74,8 +74,8 @@ const initialSchema = {
   duplicateRows: {},
   enumTypes: [],
   settings: {
-    caseSensitiveIdentifiers: false,
-    useInlineConstraints: true
+    caseSensitiveIdentifiers: true,
+    useInlineConstraints: false
   }
 };
 

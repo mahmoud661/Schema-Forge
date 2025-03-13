@@ -1,8 +1,8 @@
 import { Navigation } from "@/components/navigation";
 import { MobileWarning } from "@/components/mobile-warning";
-import { Download, FileJson, Monitor, Shield, Sparkles, Github, Globe, ExternalLink } from "lucide-react";
+import { Download, FileJson, Monitor, Shield, Sparkles, Github, Globe, ExternalLink, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { LicenseDetails } from "./license-details";
 
 export default function About() {
   return (
@@ -133,7 +133,7 @@ export default function About() {
               </div>
             </section>
             
-            {/* Creator section - NEW */}
+            {/* Creator section */}
             <section className="bg-gradient-to-r from-primary/5 to-blue-500/5 backdrop-blur-sm rounded-3xl p-8 shadow-lg border border-primary/20">
               <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex-1">
@@ -172,11 +172,13 @@ export default function About() {
                     <div className="bg-primary/20 h-full w-full flex items-center justify-center text-2xl font-bold text-primary">
                       MZ
                     </div>
-           
                   </div>
                 </div>
               </div>
             </section>
+            
+            {/* License Section */}
+            <LicenseDetails />
           </div>
         </div>
       </div>

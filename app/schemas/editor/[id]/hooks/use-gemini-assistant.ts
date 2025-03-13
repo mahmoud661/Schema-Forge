@@ -242,10 +242,10 @@ export function useGeminiAssistant() {
     
     // Get current SQL editor settings
     const currentSettings = {
-      caseSensitiveIdentifiers: useSchemaStore.getState().schema.settings?.caseSensitiveIdentifiers || false,
+      caseSensitiveIdentifiers: useSchemaStore.getState().schema.settings?.caseSensitiveIdentifiers || true,
       useInlineConstraints: useSchemaStore.getState().schema.settings?.useInlineConstraints !== undefined 
         ? useSchemaStore.getState().schema.settings.useInlineConstraints 
-        : true,
+        : false,
       dbType: sqlEditor.dbType || "postgresql"
     };
     

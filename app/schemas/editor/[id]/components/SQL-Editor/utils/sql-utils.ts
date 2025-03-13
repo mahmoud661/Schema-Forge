@@ -67,6 +67,6 @@ export const removeDuplicateAlterTableStatements = (sql: string): string => {
 
 // Default settings to use if schema settings are undefined
 export const defaultSettings = {
-  caseSensitiveIdentifiers: false,
-  useInlineConstraints: true
+  caseSensitiveIdentifiers: true,
+  useInlineConstraints: false
 };

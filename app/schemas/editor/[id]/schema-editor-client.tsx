@@ -199,8 +199,8 @@ export default function SchemaEditorClient() {
           edges: schemaMetadata.edges || [],
           enumTypes: schemaMetadata.enumTypes || [],
           settings: schemaMetadata.settings || {
-            caseSensitiveIdentifiers: false,
-            useInlineConstraints: true
+            caseSensitiveIdentifiers: true,
+            useInlineConstraints: false
           }
         });
         
