@@ -96,8 +96,7 @@ export default function SchemaEditorClient() {
     const handleRouteChangeStart = (url: string) => {
       // If navigating away from editor and has unsaved changes
       if (!url.includes(`/schemas/editor/${schemaId}`) && hasUnsavedChanges && !isExitingWithoutSaving) {
-        // Cancel the navigation
-        router.events?.abort();
+        // Cancel the navigation (cannot cancel router events in App Router)
         // Show our custom dialog by simulating Exit button click
         document.getElementById('exit-editor-button')?.click();
         return false;
@@ -105,12 +104,7 @@ export default function SchemaEditorClient() {
       return true;
     };
 
-    // For Next.js 13 App Router, we need a different approach
-    // Currently there's limited support for intercepting navigation
-    // This is a placeholder for when better APIs become available
-    
     return () => {
-      // Cleanup event listener if Next.js router events API is used
     };
   }, [hasUnsavedChanges, router, schemaId, isExitingWithoutSaving]);
   

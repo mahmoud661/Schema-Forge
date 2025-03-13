@@ -251,6 +251,7 @@ export function BrowseUI() {
                         {tag}
                         <button 
                           type="button" 
+                          aria-label="Remove tag" 
                           onClick={() => removeTag(tag)}
                           className="ml-1 text-muted-foreground hover:text-foreground"
                         >
