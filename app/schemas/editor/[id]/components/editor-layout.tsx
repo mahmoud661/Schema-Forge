@@ -12,6 +12,7 @@ interface EditorLayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   refreshKey: number;
+  hasUnsavedChanges: boolean;
 }
 
 export function EditorLayout({
@@ -20,7 +21,8 @@ export function EditorLayout({
   nodeHooks,
   activeTab,
   setActiveTab,
-  refreshKey
+  refreshKey,
+  hasUnsavedChanges
 }: EditorLayoutProps) {
   const { schema } = useSchemaStore();
   const { selectedEdge } = schema;
@@ -28,7 +30,8 @@ export function EditorLayout({
   const { 
     onSave, 
     setSelectedEdge,
-    updateEdgeData 
+    updateEdgeData,
+    allowExit
   } = flowHooks;
 
   return (
@@ -39,6 +42,8 @@ export function EditorLayout({
         onSave={onSave}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        hasUnsavedChanges={hasUnsavedChanges}
+        allowExit={allowExit}
       />
       
       <div ref={nodeHooks.reactFlowWrapper} className="flex-1 flex overflow-hidden">

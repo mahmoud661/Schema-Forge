@@ -70,7 +70,6 @@ export function FlowConfig({
   
   // Performance enhancement: Use a memoization for the ReactFlow content
   const MemoizedReactFlow = useMemo(() => {
-    console.log("Re-rendering ReactFlow");
     return (
       <ReactFlow
         nodes={nodes}

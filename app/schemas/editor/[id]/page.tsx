@@ -6,18 +6,13 @@ export const metadata: Metadata = {
   description: "Edit and visualize your database schema",
 };
 
-// Generate all possible static paths including template-based IDs
-export function generateStaticParams() {
-  const paths = [];
+// Force dynamic rendering for all schema editor pages
+export const dynamic = "force-dynamic";
 
-  // Add fixed routes
-  paths.push({ id: "new" });
+// Explicitly disable static params - we can't know all schema IDs at build time
+export const generateStaticParams = undefined;
 
-
-
-  return paths;
-}
-
+// This component will be rendered dynamically for each schema ID
 export default function SchemaEditorPage() {
   return <SchemaEditorClient />;
 }

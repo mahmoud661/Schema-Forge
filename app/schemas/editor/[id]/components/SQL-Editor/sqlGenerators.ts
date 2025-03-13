@@ -303,7 +303,7 @@ export const generateSql = (
   schemaNodes: any[], 
   schemaEdges: any[],
   enumTypes: any[] = [],
-  settings = { caseSensitiveIdentifiers: false, useInlineConstraints: true }
+  settings = { caseSensitiveIdentifiers: true, useInlineConstraints: false }
 ): string => {
   let sql = "";
   sql += `-- Generated ${new Date().toLocaleString()} for ${type.toUpperCase()}\n`;

@@ -9,7 +9,13 @@ import { useSchemaStore } from "@/hooks/use-schema";
 import { EditorLayout } from ".././editor-layout";
 import { useColorHandlers } from ".././color-handlers";
 
-export function SchemaFlow() {
+interface SchemaFlowProps {
+  onSave: () => void;
+  hasUnsavedChanges: boolean;
+  allowExit: () => void;
+}
+
+export function SchemaFlow({ onSave, hasUnsavedChanges, allowExit }: SchemaFlowProps) {
   // Use the centralized schema store
   const { schema, updateActiveTab } = useSchemaStore();
   const { nodes, edges, activeTab } = schema;
@@ -66,24 +72,32 @@ export function SchemaFlow() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // @ts-ignore - This is an intentional global for optimization
-      window.__schemaColorUpdater = handleBorderColorUpdate;
+      window.__schemaBorderColorUpdater = handleBorderColorUpdate;
     }
     
     return () => {
       if (typeof window !== 'undefined') {
         // @ts-ignore
-        delete window.__schemaColorUpdater;
+        delete window.__schemaBorderColorUpdater;
       }
     };
   }, [handleBorderColorUpdate]);
 
+  // Pass the onSave function and allowExit to flowHooks
+  const enhancedFlowHooks = {
+    ...flowHooks,
+    onSave,
+    allowExit
+  };
+
   return (
     <EditorLayout 
-      flowHooks={flowHooks}
+      flowHooks={enhancedFlowHooks}
       nodeHooks={nodeHooks}
       activeTab={activeTab}
       setActiveTab={updateActiveTab}
       refreshKey={refreshKey}
+      hasUnsavedChanges={hasUnsavedChanges}
     >
       <Toaster position="top-right" />
     </EditorLayout>

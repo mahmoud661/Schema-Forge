@@ -1,10 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  eslint: {
-    ignoreDuringBuilds: true,
+  reactStrictMode: true,
+  // Make sure we're not using the 'export' output
+  // which requires all dynamic paths to be known at build time
+  output: 'standalone',
+  
+  // Enable appropriate experimental features if needed
+  experimental: {
+    // This may help with certain dynamic rendering scenarios
+    serverActions: true,
   },
-  images: { unoptimized: true },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
