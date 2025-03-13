@@ -35,9 +35,9 @@ export function SqlEditor() {
           enumTypes={sqlEditor.enumTypes}
         />
       }
-      headerClassName="p-4 flex-col gap-3 sm:flex-row"
+      headerClassName="p-4"
       collapsible={true}
-      position="left" // Add this prop to specify it's on the right
+      position="left"
     >
       <SqlEditorContent 
         error={sqlEditor.error}

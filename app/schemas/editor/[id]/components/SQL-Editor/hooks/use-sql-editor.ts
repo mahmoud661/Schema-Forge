@@ -32,6 +32,11 @@ export function useSqlEditor() {
   const [error, setError] = useState<string | null>(null);
   const [liveEditMode, setLiveEditMode] = useState<boolean>(false);
   
+  // Use a stable function reference for setDbType
+  const handleSetDbType = useCallback((type: string) => {
+    setDbType(type);
+  }, []);
+  
   // On mount, initialize settings if they don't exist and generate SQL once
   useEffect(() => {
     if (!schema.settings) {
@@ -230,7 +235,7 @@ export function useSqlEditor() {
     editingSqlCode,
     
     // State setters
-    setDbType,
+    setDbType: handleSetDbType,
     setEditingSqlCode,
     setIsEditing,
     setLiveEditMode,
