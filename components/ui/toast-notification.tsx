@@ -123,6 +123,7 @@ export function showToast(options: ToastOptions) {
         )}
       </div>
       <button 
+        aria-label="Close notification"
         onClick={() => {
           toast.style.opacity = '0';
           toast.style.transform = 'translateX(100%)';

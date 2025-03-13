@@ -52,7 +52,7 @@ export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
   },
   
   finishAiEditing: (success = false) => {
-    console.log('[SQL Editor Store] Finishing AI editing mode, success:', success);
+    console.log(`[SQL Editor Store] Finishing AI editing mode, success: ${success}`);
     set({ 
       isAiEditing: false,
       successAnimation: success,
@@ -76,12 +76,17 @@ export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
 }));
 
 // Listen to schema store changes and update SQL code
-useSchemaStore.subscribe(
-  (state) => state.schema.sqlCode,
-  (sqlCode) => {
-    console.log('[SQL Editor Store] Syncing SQL code from schema store');
+interface Schema {
+    sqlCode: string;
+}
+
+interface SchemaStoreState {
+    schema: Schema;
+}
+
+useSchemaStore.subscribe((state) => {
+    const sqlCode = state.schema.sqlCode;
     if (sqlCode && sqlCode.trim() !== '') {
-      useSqlEditorStore.setState({ sqlCode, error: null });
+        useSqlEditorStore.setState({ sqlCode, error: null });
     }
-  }
-);
+});

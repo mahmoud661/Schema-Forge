@@ -4,6 +4,7 @@ import {
   generateSqlCompletion, 
   streamSqlCompletion, 
   streamSchemaFromDescription, 
+  generateSchemaFromDescription,
   initGeminiAPI 
 } from "@/lib/gemini-api";
 import { parseSqlToSchema } from "../components/SQL-Editor/sqlParser";
@@ -129,18 +130,22 @@ export function useGeminiAssistant() {
       
       // Check more comprehensively for schema generation requests
       const isSchemaRequest = 
-        prompt.toLowerCase().match(/generat(e|ing)(\s+a)?\s+(database|schema|tables)/i) ||
-        prompt.toLowerCase().match(/creat(e|ing)(\s+a)?\s+(database|schema|tables)/i) ||
-        prompt.toLowerCase().match(/design(\s+a)?\s+(database|schema)/i) ||
-        prompt.toLowerCase().match(/build(\s+a)?\s+(database|schema)/i) ||
-        prompt.toLowerCase().match(/make(\s+a)?\s+(database|schema)/i) ||
-        prompt.toLowerCase().match(/add(\s+a)?\s+(database|schema)/i) ||
-        prompt.toLowerCase().match(/schema\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
-        prompt.toLowerCase().match(/database\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
-        prompt.toLowerCase().match(/tables\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
+        prompt.toLowerCase().match(/generat(e|ing)(\s+a)?(\s+new)?(\s+complete)?\s+(database|schema|tables)/i) ||
+        prompt.toLowerCase().match(/creat(e|ing)(\s+a)?(\s+new)?\s+(database|schema|tables)/i) ||
+        prompt.toLowerCase().match(/design(\s+a)?\s+(database|schema|data\s+model)/i) ||
+        prompt.toLowerCase().match(/build(\s+a)?\s+(database|schema|data\s+model)/i) ||
+        prompt.toLowerCase().match(/make(\s+a)?\s+(database|schema|data\s+model)/i) ||
+        prompt.toLowerCase().match(/add(\s+a)?\s+(database|schema|data\s+model)/i) ||
+        prompt.toLowerCase().match(/schema\s+for\s+[a-z\s]+(site|website|application|app|system|platform|project)/i) ||
+        prompt.toLowerCase().match(/database\s+for\s+[a-z\s]+(site|website|application|app|system|platform|project)/i) ||
+        prompt.toLowerCase().match(/tables\s+for\s+[a-z\s]+(site|website|application|app|system|platform|project)/i) ||
         prompt.toLowerCase().includes('e-commerce database') ||
         prompt.toLowerCase().includes('database schema') ||
-        prompt.toLowerCase().includes('e-commerce schema');
+        prompt.toLowerCase().includes('e-commerce schema') ||
+        prompt.toLowerCase().includes('create tables') ||
+        prompt.toLowerCase().includes('generate tables') ||
+        prompt.toLowerCase().includes('schema design') ||
+        prompt.toLowerCase().includes('database design');
       
       if (isSchemaRequest) {
         try {
@@ -301,7 +306,7 @@ export function useGeminiAssistant() {
       
       // Finish AI editing
       console.log('[AI Debug] Finishing AI editing mode');
-      aiEditor.finishEditing(true); // Pass true to indicate successful completion
+      aiEditor.finishEditing(); // Pass true to indicate successful completion
       
       // Clear the toast
       dismissToast();
@@ -322,25 +327,6 @@ export function useGeminiAssistant() {
           useSqlEditorStore.getState().setSqlCode(result.data?.sql || '');
           useSqlEditorStore.getState().setIsEditing(false);
           
-          // More detailed success toast with counts
-          showToast({
-            title: "Schema Generated Successfully",
-            description: `Created ${parsedSchema.nodes.length} tables with ${
-              parsedSchema.edges?.length || 0
-            } relationships and ${
-              parsedSchema.enumTypes?.length || 0
-            } enum types.`,
-            type: 'success',
-            duration: 6000,
-            action: {
-              label: "View Schema",
-              onClick: () => {
-                // Switch to visual tab to see the schema
-                useSchemaStore.getState().updateActiveTab("visual");
-              }
-            },
-            position: 'top-center'
-          });
           
           // Add a more detailed success message that includes what was created
           const successMessage: GeminiMessage = {
@@ -376,7 +362,7 @@ export function useGeminiAssistant() {
         // Add error message to the chat
         const errorMessage: GeminiMessage = {
           role: 'assistant',
-          content: `I generated a schema but encountered an error while parsing it: ${parseErr.message}. Please try again.`,
+          content: `I generated a schema but encountered an error while parsing it: ${(parseErr as Error).message || 'Unknown error'}. Please try again.`,
           id: `error-${Date.now()}`,
           timestamp: Date.now()
         };
@@ -479,7 +465,7 @@ export function useGeminiAssistant() {
     
     // Track SQL code blocks
     let streamedContent = '';
-    let extractedSql = null;
+    let extractedSql: string = '';
     let isSqlSection = false;
     
     try {
@@ -541,7 +527,7 @@ export function useGeminiAssistant() {
       const assistantMessage: GeminiMessage = {
         role: 'assistant',
         content: streamedContent.trim(),
-        ...(extractedSql ? { suggestion: { sql: extractedSql.trim() } } : {}),
+        ...(extractedSql.trim() ? { suggestion: { sql: extractedSql.trim() } } : {}),
         id: `assistant-${Date.now()}`,
         timestamp: Date.now()
       };

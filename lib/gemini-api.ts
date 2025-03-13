@@ -117,9 +117,9 @@ export const streamSqlCompletion = async (
         }
         
         return { success: true, data: accumulatedResponse };
-      } catch (streamParseError) {
+      } catch (streamParseError: any) { // changed from streamParseError to streamParseError: any
         // Check specifically for stream parsing errors
-        if (streamParseError.message?.includes("Failed to parse stream")) {
+        if ((streamParseError as any).message?.includes("Failed to parse stream")) {
           console.warn("Stream parsing error detected, falling back to standard API:", streamParseError);
           streamErrorWarningShown = true;
           
@@ -276,7 +276,7 @@ export const streamSchemaFromDescription = async (
             onChunk(chunkText);
           }
         }
-      } catch (streamParseError) {
+      } catch (streamParseError: any) { // changed from streamParseError to streamParseError: any
         // Check specifically for stream parsing errors
         if (streamParseError.message?.includes("Failed to parse stream")) {
           console.warn("Stream parsing error detected, falling back to standard API:", streamParseError);
@@ -406,11 +406,11 @@ export const startSqlChatSession = (context?: string) => {
       history: context ? [
         {
           role: "user",
-          parts: "I need help with SQL schema design. Here is my current schema:",
+          parts: [{ text: "I need help with SQL schema design. Here is my current schema:" }]
         },
         {
           role: "model",
-          parts: "I'll help you with your SQL schema design. What would you like to know or modify?"
+          parts: [{ text: "I'll help you with SQL schema design. What would you like to know or modify?" }]
         }
       ] : [],
       generationConfig: {

@@ -42,7 +42,7 @@ export function SqlPreview({ sqlCode, dbType, onApplySuggestion }: SqlPreviewPro
         throw new Error(result.error || "Failed to generate SQL suggestion");
       }
       
-      setSuggestion(result.data);
+      setSuggestion(result.data || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
