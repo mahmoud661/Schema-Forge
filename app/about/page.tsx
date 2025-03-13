@@ -37,7 +37,7 @@ export default function About() {
               
               <p className="text-lg text-muted-foreground leading-relaxed">
                 Schema Forge was created to provide developers with a simple, accessible tool for database design
-                that doesn't require backend infrastructure. I believe that database design tools should be 
+                that doesn&apos;t require backend infrastructure. I believe that database design tools should be 
                 available to everyone, from students to professional developers, without the need for accounts
                 or subscriptions.
               </p>
@@ -61,7 +61,7 @@ export default function About() {
                   <FileJson className="h-8 w-8 text-primary mb-3 group-hover:scale-110 transition-transform duration-300" />
                   <h3 className="text-xl font-semibold mb-2 text-foreground/90">Local Data Storage</h3>
                   <p className="text-muted-foreground">
-                    All your schemas are stored in your browser's local storage,
+                    All your schemas are stored in your browser&apos;s local storage,
                     giving you complete control over your data.
                   </p>
                 </div>
