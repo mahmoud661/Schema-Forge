@@ -63,6 +63,12 @@ export function useSqlEditor() {
   const [dbType, setDbType] = useState("postgresql");
   const [liveEditMode, setLiveEditMode] = useState(false);
   
+  // Set default settings to match PostgreSQL format
+  const defaultSettings = {
+    caseSensitiveIdentifiers: false,  // No quotes for regular identifiers
+    useInlineConstraints: true,       // Use inline REFERENCES syntax
+  };
+
   // Update SQL from schema when database type changes or schema changes
   useEffect(() => {
     if (!isEditing) {

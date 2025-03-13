@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import EditorComponent from "../EditorComponent";
 import { useSqlEditorStore } from "../../../store/sql-editor-store";
 
@@ -22,16 +22,37 @@ export function SqlEditorContent({
   // Get state directly from the store
   const isAiEditing = useSqlEditorStore(state => state.isAiEditing);
   const successAnimation = useSqlEditorStore(state => state.successAnimation);
+  const clearError = useSqlEditorStore(state => state.clearError);
+  
+  // Clear error when switching to AI editing mode
+  useEffect(() => {
+    if (isAiEditing) {
+      clearError();
+    }
+  }, [isAiEditing, clearError]);
+  
+  // Clear error when SQL code changes
+  useEffect(() => {
+    if (sqlCode && sqlCode.trim().length > 0) {
+      clearError();
+    }
+  }, [sqlCode, clearError]);
   
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {error && (
+      {error && !isAiEditing && (
         <div className="bg-destructive/10 text-destructive p-3 m-4 rounded-md border border-destructive overflow-auto">
           <p className="mb-2 font-medium">{error}</p>
           <details className="text-xs opacity-80">
             <summary>Show troubleshooting info</summary>
             <p className="mt-2">If your foreign keys are not showing up, make sure the table names and row names match exactly (including case).</p>
             <p className="mt-1">The ALTER TABLE statement should look like: ALTER TABLE "Table1" ADD CONSTRAINT name FOREIGN KEY ("row") REFERENCES "Table2"("row");</p>
+            <p className="mt-2"><strong>Recommended Settings:</strong></p>
+            <ul className="list-disc list-inside ml-2">
+              <li>Database Type: PostgreSQL</li>
+              <li>Case Sensitive Identifiers: Off</li>
+              <li>Use Inline Constraints: On</li>
+            </ul>
           </details>
         </div>
       )}

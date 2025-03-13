@@ -9,6 +9,7 @@ import {
 import { parseSqlToSchema } from "../components/SQL-Editor/sqlParser";
 import { showToast } from "@/components/ui/toast-notification";
 import { useSqlEditor } from "../components/SQL-Editor/hooks/use-sql-editor";
+import { useSqlEditorStore } from "../store/sql-editor-store"; // Add this import
 
 interface GeminiMessage {
   role: 'user' | 'assistant';
@@ -128,12 +129,18 @@ export function useGeminiAssistant() {
       
       // Check more comprehensively for schema generation requests
       const isSchemaRequest = 
-        prompt.toLowerCase().includes('generate schema') ||
-        prompt.toLowerCase().includes('create tables for') ||
-        prompt.toLowerCase().includes('design database for') ||
+        prompt.toLowerCase().match(/generat(e|ing)(\s+a)?\s+(database|schema|tables)/i) ||
+        prompt.toLowerCase().match(/creat(e|ing)(\s+a)?\s+(database|schema|tables)/i) ||
+        prompt.toLowerCase().match(/design(\s+a)?\s+(database|schema)/i) ||
+        prompt.toLowerCase().match(/build(\s+a)?\s+(database|schema)/i) ||
+        prompt.toLowerCase().match(/make(\s+a)?\s+(database|schema)/i) ||
+        prompt.toLowerCase().match(/add(\s+a)?\s+(database|schema)/i) ||
+        prompt.toLowerCase().match(/schema\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
+        prompt.toLowerCase().match(/database\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
+        prompt.toLowerCase().match(/tables\s+for\s+[a-z\s]+(site|website|application|app|system|platform)/i) ||
         prompt.toLowerCase().includes('e-commerce database') ||
         prompt.toLowerCase().includes('database schema') ||
-        (prompt.toLowerCase().includes('create') && prompt.toLowerCase().includes('schema'));
+        prompt.toLowerCase().includes('e-commerce schema');
       
       if (isSchemaRequest) {
         try {
@@ -209,11 +216,11 @@ export function useGeminiAssistant() {
   const handleSchemaGeneration = async (prompt: string) => {
     console.log('[AI Debug] Starting schema generation, requesting AI editing mode');
     
-    // First add a streaming message placeholder
+    // First add a streaming message placeholder that clearly indicates the action
     const streamingMsgId = `assistant-streaming-${Date.now()}`;
     const processingMessage: GeminiMessage = {
       role: 'assistant',
-      content: 'Generating schema directly in the SQL editor...',
+      content: "I'll generate a complete database schema directly in the SQL editor based on your request. Please check the SQL tab to see the schema being created in real-time.",
       isStreaming: true,
       id: streamingMsgId,
       timestamp: Date.now()
@@ -221,9 +228,33 @@ export function useGeminiAssistant() {
     
     setMessages(prev => [...prev, processingMessage]);
     
+    // Give user a moment to see the intent message before starting the process
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
     // Start AI editing mode in SQL editor - get control interface
     const aiEditor = sqlEditor.startAiEditing();
     console.log('[AI Debug] AI Editor interface received:', !!aiEditor);
+    
+    // Get current SQL editor settings
+    const currentSettings = {
+      caseSensitiveIdentifiers: useSchemaStore.getState().schema.settings?.caseSensitiveIdentifiers || false,
+      useInlineConstraints: useSchemaStore.getState().schema.settings?.useInlineConstraints !== undefined 
+        ? useSchemaStore.getState().schema.settings.useInlineConstraints 
+        : true,
+      dbType: sqlEditor.dbType || "postgresql"
+    };
+    
+    console.log('[AI Debug] Using SQL settings:', currentSettings);
+    
+    // Update the message to indicate active generation
+    setMessages(prev => prev.map(msg => 
+      msg.id === streamingMsgId 
+        ? { 
+            ...msg, 
+            content: "I'll generate a complete database schema directly in the SQL editor based on your request. Please check the SQL tab to see the schema being created in real-time.\n\n*Schema generation in progress...*"
+          }
+        : msg
+    ));
     
     // Show active AI toast
     const dismissToast = showToast({
@@ -237,8 +268,8 @@ export function useGeminiAssistant() {
     let usedFallback = false;
     
     try {
-      console.log('[AI Debug] Starting schema stream generation');
-      // Start streaming response with our improved streaming function
+      console.log('[AI Debug] Starting schema stream generation with user settings');
+      // Start streaming response with our improved streaming function, passing settings
       const result = await streamSchemaFromDescription(
         prompt,
         // On each chunk
@@ -257,7 +288,9 @@ export function useGeminiAssistant() {
         // On complete - nothing additional to do
         () => {
           console.log('[AI Debug] Schema generation complete');
-        }
+        },
+        // Pass the current editor settings to instruct AI formatting
+        currentSettings
       );
       
       if (!result.success) {
@@ -268,7 +301,7 @@ export function useGeminiAssistant() {
       
       // Finish AI editing
       console.log('[AI Debug] Finishing AI editing mode');
-      aiEditor.finishEditing();
+      aiEditor.finishEditing(true); // Pass true to indicate successful completion
       
       // Clear the toast
       dismissToast();
@@ -284,6 +317,10 @@ export function useGeminiAssistant() {
             sqlCode: result.data?.sql || '',
             ...(parsedSchema.enumTypes ? { enumTypes: parsedSchema.enumTypes } : {})
           });
+          
+          // Force the SQL Editor store to sync with the updated schema
+          useSqlEditorStore.getState().setSqlCode(result.data?.sql || '');
+          useSqlEditorStore.getState().setIsEditing(false);
           
           // More detailed success toast with counts
           showToast({
@@ -367,12 +404,12 @@ export function useGeminiAssistant() {
       console.error("Schema generation error:", error);
       
       // Special handling for stream parsing errors
-      if (error.message.includes("parse stream")) {
+      if (error.message.includes("parse stream") || error.message.includes("SWITCH_TO_NON_STREAMING")) {
         // Try again with regular non-streaming method
         try {
           showToast({
-            title: "Trying Different Approach",
-            description: "Stream mode failed. Using standard mode instead.",
+            title: "Connection Issue Detected",
+            description: "Switching to alternative generation method...",
             type: 'warning',
             duration: 4000
           });
@@ -386,7 +423,7 @@ export function useGeminiAssistant() {
             // Update message
             const successMessage: GeminiMessage = {
               role: 'assistant',
-              content: 'I\'ve created a schema using a fallback method and applied it to the SQL Editor.',
+              content: 'I\'ve created a schema using an alternative method and applied it to the SQL Editor.',
               suggestion: {
                 sql: fallbackResult.data.sql
               },
@@ -413,7 +450,9 @@ export function useGeminiAssistant() {
         const filtered = prev.filter(m => m.id !== streamingMsgId);
         return [...filtered, {
           role: 'assistant',
-          content: `I encountered an error generating the schema: ${error.message}. Would you like to try using a simpler description?`,
+          content: `I encountered an error generating the schema: ${error.message.includes("parse stream") ? 
+            "There was a problem with the connection to the AI service." : 
+            error.message}. Would you like to try again with a simpler description?`,
           id: `error-${Date.now()}`,
           timestamp: Date.now()
         }];

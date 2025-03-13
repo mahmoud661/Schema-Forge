@@ -18,6 +18,7 @@ interface SqlEditorState {
   finishAiEditing: (success?: boolean) => void;
   setError: (error: string | null) => void;
   setSuccessAnimation: (value: boolean) => void;
+  clearError: () => void; // Add method to explicitly clear errors
 }
 
 export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
@@ -30,13 +31,24 @@ export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
   error: null,
   
   // Actions
-  setSqlCode: (code) => set({ sqlCode: code }),
+  setSqlCode: (code) => {
+    // Clear any errors when setting new SQL code
+    set({ sqlCode: code, error: null });
+  },
   setEditingSqlCode: (code) => set({ editingSqlCode: code }),
-  setIsEditing: (isEditing) => set({ isEditing }),
+  setIsEditing: (isEditing) => {
+    // When turning off edit mode, clear any errors
+    if (!isEditing) {
+      set({ isEditing, error: null });
+    } else {
+      set({ isEditing });
+    }
+  },
   
   startAiEditing: () => {
     console.log('[SQL Editor Store] Starting AI editing mode');
-    set({ isAiEditing: true });
+    // Clear any existing errors when starting AI editing
+    set({ isAiEditing: true, error: null });
   },
   
   finishAiEditing: (success = false) => {
@@ -44,6 +56,10 @@ export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
     set({ 
       isAiEditing: false,
       successAnimation: success,
+      // Clear any errors when AI editing finishes successfully
+      error: success ? null : get().error,
+      // Turn off editing mode automatically
+      isEditing: false,
     });
     
     // Reset success animation after a delay
@@ -55,6 +71,7 @@ export const useSqlEditorStore = create<SqlEditorState>((set, get) => ({
   },
   
   setError: (error) => set({ error }),
+  clearError: () => set({ error: null }),
   setSuccessAnimation: (value) => set({ successAnimation: value }),
 }));
 
@@ -63,6 +80,8 @@ useSchemaStore.subscribe(
   (state) => state.schema.sqlCode,
   (sqlCode) => {
     console.log('[SQL Editor Store] Syncing SQL code from schema store');
-    useSqlEditorStore.setState({ sqlCode });
+    if (sqlCode && sqlCode.trim() !== '') {
+      useSqlEditorStore.setState({ sqlCode, error: null });
+    }
   }
 );
