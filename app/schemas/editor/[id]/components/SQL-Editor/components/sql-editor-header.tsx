@@ -21,6 +21,7 @@ export interface SqlEditorHeaderProps {
   handleToggleCaseSensitive: () => void;
   handleToggleInlineConstraints: () => void;
   enumTypes: any[];
+  isAiEditing?: boolean; // Add this new prop
 }
 
 export function SqlEditorHeader({
@@ -36,7 +37,8 @@ export function SqlEditorHeader({
   settings,
   handleToggleCaseSensitive,
   handleToggleInlineConstraints,
-  enumTypes
+  enumTypes,
+  isAiEditing, // Add this to the destructured props
 }: SqlEditorHeaderProps) {
   const databaseOptions = [
     { value: "postgresql", label: "PostgreSQL", recommended: true },

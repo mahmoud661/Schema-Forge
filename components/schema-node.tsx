@@ -104,6 +104,32 @@ const SchemaNode = memo(
         const rowKey = row.id || `${idx}-${row.title}`;
         const enumName = isEnum ? row.type.replace('enum_', '') : null;
 
+        // Create left handle component
+        const leftHandle = (
+          <Handle
+            id={`target-${row.title}`}
+            type="target"
+            position={Position.Left}
+            className="!absolute transition-all duration-150"
+            style={isEnum 
+              ? getEnumHandleStyle(isDarkMode) 
+              : getHandleStyle('target', isPrimary || isUnique, isDarkMode)}
+          />
+        );
+
+        // Create right handle component
+        const rightHandle = (
+          <Handle
+            id={`source-${row.title}`}
+            type="source"
+            position={Position.Right}
+            className="!absolute transition-all duration-150"
+            style={isEnum 
+              ? getEnumHandleStyle(isDarkMode)
+              : getHandleStyle('source', isPrimary || isUnique, isDarkMode)}
+          />
+        );
+
         return (
           <DatabaseSchemaTableRow 
             key={rowKey} 
@@ -113,17 +139,7 @@ const SchemaNode = memo(
               isEnum && "bg-purple-50/30 dark:bg-purple-900/10"
             )}
           >
-            <Handle
-              id={`target-${row.title}`}
-              type="target"
-              position={Position.Left}
-              className="!absolute transition-all duration-150"
-              style={isEnum 
-                ? getEnumHandleStyle(isDarkMode) 
-                : getHandleStyle('target', isPrimary || isUnique, isDarkMode)}
-            />
-              
-            <DatabaseSchemaTableCell className="pl-4 pr-2">
+            <DatabaseSchemaTableCell className="pl-4 pr-2" leftHandle={leftHandle}>
               <div className="flex items-center gap-2">
                 <span className="truncate text-xs font-medium">
                   {row.title}
@@ -167,7 +183,7 @@ const SchemaNode = memo(
               </div>
             </DatabaseSchemaTableCell>
               
-            <DatabaseSchemaTableCell className="pr-4 text-muted-foreground">
+            <DatabaseSchemaTableCell className="pr-4 text-muted-foreground" rightHandle={rightHandle}>
               {isEnum ? (
                 <TooltipProvider>
                   <Tooltip>
@@ -187,16 +203,6 @@ const SchemaNode = memo(
                 </span>
               )}
             </DatabaseSchemaTableCell>
-              
-            <Handle
-              id={`source-${row.title}`}
-              type="source"
-              position={Position.Right}
-              className="!absolute transition-all duration-150"
-              style={isEnum 
-                ? getEnumHandleStyle(isDarkMode)
-                : getHandleStyle('source', isPrimary || isUnique, isDarkMode)}
-            />
           </DatabaseSchemaTableRow>
         );
       });

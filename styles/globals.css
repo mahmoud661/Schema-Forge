@@ -134,6 +134,68 @@
   }
 }
 
+/* AI Editing Styles */
+.ai-editing-border {
+  border: 1px solid theme('colors.violet.500');
+  box-shadow: 0 0 0 1px theme('colors.violet.500/30');
+}
+
+@keyframes aiBlink {
+  0%, 100% { border-color: theme('colors.violet.500'); }
+  50% { border-color: theme('colors.violet.300'); }
+}
+
+.ai-editing {
+  animation: aiBlink 1.5s infinite;
+}
+
+/* Success Animation Styles */
+.success-border {
+  border: 1px solid theme('colors.green.500');
+  box-shadow: 0 0 8px theme('colors.green.500/60');
+  transition: all 0.3s ease;
+}
+
+@keyframes successPulse {
+  0% { background-color: transparent; }
+  30% { background-color: theme('colors.green.500/10'); }
+  100% { background-color: transparent; }
+}
+
+.success-flash {
+  animation: successPulse 1.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.5s ease;
+}
+
+/* Enhanced Toast Styles */
+.toast-success {
+  background-color: theme('colors.green.500');
+  color: white;
+  font-weight: 500;
+}
+
+.toast-notification {
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

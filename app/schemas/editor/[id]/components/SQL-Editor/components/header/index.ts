@@ -1,5 +1,4 @@
-// Export all components from this directory
-export * from './DatabaseSelector';
-export * from './EditModeControls';
-export * from './UtilityButtons';
-export * from './SettingsPopover';
+export { DatabaseSelector } from './DatabaseSelector';
+export { EditModeControls } from './EditModeControls';
+export { UtilityButtons } from './UtilityButtons';
+export { SqlPreview } from './SqlPreview';

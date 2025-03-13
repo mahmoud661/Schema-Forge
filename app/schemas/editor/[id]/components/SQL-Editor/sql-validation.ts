@@ -6,16 +6,17 @@
 export function validateSqlSyntax(sql: string): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
   
-  // Empty check
-  if (!sql || !sql.trim()) {
-    errors.push("SQL cannot be empty");
+  // Trim SQL and ensure it's not empty
+  const trimmedSql = sql.trim();
+  if (!trimmedSql) {
+    errors.push('SQL cannot be empty');
     return { isValid: false, errors };
   }
   
-  // Check for CREATE TABLE statements
-  if (!sql.toUpperCase().includes('CREATE TABLE')) {
-    errors.push("SQL must contain at least one CREATE TABLE statement");
-    return { isValid: false, errors };
+  // Check for CREATE TABLE statements - make this case insensitive
+  const createTablePattern = /create\s+table\s+/i;
+  if (!createTablePattern.test(trimmedSql)) {
+    errors.push('SQL must contain at least one CREATE TABLE statement');
   }
   
   // Basic parenthesis matching

@@ -67,13 +67,23 @@ export const DatabaseSchemaTableRow = ({
 export type DatabaseSchemaTableCellProps = {
   className?: string;
   children?: ReactNode;
+  leftHandle?: ReactNode;  // Add support for left handle
+  rightHandle?: ReactNode; // Add support for right handle
 };
 
 export const DatabaseSchemaTableCell = ({
   className,
   children,
+  leftHandle,
+  rightHandle,
 }: DatabaseSchemaTableCellProps) => {
-  return <TableCell className={className}>{children}</TableCell>;
+  return (
+    <TableCell className={`relative ${className || ""}`}>
+      {leftHandle}
+      {children}
+      {rightHandle}
+    </TableCell>
+  );
 };
 
 /* DATABASE SCHEMA NODE ------------------------------------------------------- */

@@ -1,11 +1,29 @@
-import React from "react";
-import { Download } from "lucide-react";
+import React, { useState } from "react";
+import { 
+  DownloadIcon, 
+  Settings2, 
+  Check, 
+  Quote, 
+  FastForward, 
+  Lightbulb, 
+  FileCode
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SqlEditorSettings } from "../../types/types";
+import { SqlPreview } from "./SqlPreview";
+import { SqlEditorSettings } from "../../hooks/use-sql-editor";
+import { useSqlEditor } from "../../hooks/use-sql-editor";
 import { SettingsPopover } from "./SettingsPopover";
+import { useSchemaStore } from "@/hooks/use-schema";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
-export interface UtilityButtonsProps {
+interface UtilityButtonsProps {
   handleDownload: () => void;
   settings: SqlEditorSettings;
   handleToggleCaseSensitive: () => void;
@@ -15,34 +33,44 @@ export interface UtilityButtonsProps {
   isEditing: boolean;
 }
 
-export function UtilityButtons({ 
-  handleDownload, 
-  settings, 
-  handleToggleCaseSensitive, 
-  handleToggleInlineConstraints, 
-  dbType, 
+export function UtilityButtons({
+  handleDownload,
+  settings,
+  handleToggleCaseSensitive,
+  handleToggleInlineConstraints,
+  dbType,
   enumTypes,
   isEditing
 }: UtilityButtonsProps) {
+  const { sqlCode, handleApplySqlSuggestion } = useSqlEditor();
+  
+  // Get display text for enum types count
+  const getEnumCountDisplay = () => {
+    const count = enumTypes?.length || 0;
+    if (count === 0) return "No ENUMs defined";
+    return `${count} ENUM type${count === 1 ? '' : 's'} defined`;
+  };
+  
   return (
-    <div className={`flex items-center ${isEditing ? 'justify-end' : ''} gap-2.5`}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleDownload} 
-            className="h-9 px-3 text-sm font-medium"
-          >
-            <Download className="h-4 w-4 mr-1.5" />
-            <span className={`${isEditing ? 'hidden' : ''} sm:inline`}>Download</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p className="text-xs">Download SQL file</p>
-        </TooltipContent>
-      </Tooltip>
-      
+    <TooltipProvider>
+      <div className="flex items-center gap-2">
+
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleDownload}
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+            >
+              <DownloadIcon size={16} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Download SQL</TooltipContent>
+        </Tooltip>
+        
+
       <SettingsPopover 
         settings={settings}
         handleToggleCaseSensitive={handleToggleCaseSensitive}
@@ -51,6 +79,7 @@ export function UtilityButtons({
         enumTypes={enumTypes}
         isEditing={isEditing}
       />
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
