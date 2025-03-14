@@ -28,19 +28,10 @@ export default function HomePage() {
                 No backend, no account required, and all your data stays on your device.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
-                <Link href="/schemas">
+                <Link href="/browse">
                   <Button size="lg" className="bg-primary hover:bg-primary/90">
                     Start Designing
                     <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/browse">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-primary/20 hover:bg-primary/10"
-                  >
-                    Browse Examples
                   </Button>
                 </Link>
               </div>
