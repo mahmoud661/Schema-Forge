@@ -1,10 +1,12 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useEffect } from "react";
 import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
 import { FlowControls } from "./flow-controls";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { CustomEdge } from "@/components/ui/custom-edge";
+import { useLocalStorage } from "@/hooks/use-local-storage";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
@@ -57,14 +59,28 @@ export function FlowConfig({
     return Array.from(edgeMap.values());
   }, [storeEdges]);
 
+  // Add support for restoring viewport from localStorage
+  const [storedViewport] = useLocalStorage<{ x: number; y: number; zoom: number } | null>('schema-viewport', null);
+  
   // Performance enhancement: Optimize panning and viewport for large diagrams
   const onInit = useCallback((reactFlowInstance: any) => {
-    reactFlowInstance.fitView({
-      padding: 0.2,
-      maxZoom: 1.5,
-      minZoom: 0.5,
-    });
-  }, []);
+    // If we have a stored viewport position, use it
+    if (storedViewport) {
+      reactFlowInstance.setViewport(storedViewport, { duration: 800 });
+    } else {
+      reactFlowInstance.fitView({
+        padding: 0.2,
+        maxZoom: 1.5,
+        minZoom: 0.5,
+      });
+    }
+    
+    // Add the reactFlowInstance to window for debugging purposes
+    if (process.env.NODE_ENV === 'development') {
+      // @ts-ignore
+      window.__reactFlowInstance = reactFlowInstance;
+    }
+  }, [storedViewport]);
 
   // Create an efficient memoization key that doesn't change for color-only updates
   const memoKey = useMemo(() => {
@@ -73,9 +89,10 @@ export function FlowConfig({
       edgeCount: edges.length,
       selectedNodeId: nodeHooks.selectedNode?.id || 'none',
       lastStructuralUpdate: nodes.map(node => node._colorUpdated ? '' : node.id).join('|'),
-      refreshKey
+      refreshKey,
+      storedViewport: storedViewport ? JSON.stringify(storedViewport) : 'none'
     };
-  }, [nodes, edges, nodeHooks.selectedNode, refreshKey]);
+  }, [nodes, edges, nodeHooks.selectedNode, refreshKey, storedViewport]);
   
   // Performance enhancement: Use a memoization for the ReactFlow content
   const MemoizedReactFlow = useMemo(() => {
@@ -92,7 +109,8 @@ export function FlowConfig({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onInit={onInit}
-        fitView
+       
+        fitView={!storedViewport}
         onDragOver={nodeHooks.onDragOver}
         onDrop={nodeHooks.onDrop}
         className="bg-muted/30"
@@ -114,8 +132,14 @@ export function FlowConfig({
           [-2000, -2000],
           [4000, 4000]
         ]}
+        deleteKeyCode={['Backspace', 'Delete']}
+        // Add more key bindings
+        multiSelectionKeyCode={['Control', 'Meta']}
+        selectionKeyCode={['Shift']}
       >
-        <FlowControls />
+        <TooltipProvider>
+          <FlowControls />
+        </TooltipProvider>
       </ReactFlow>
     );
   }, [memoKey]);

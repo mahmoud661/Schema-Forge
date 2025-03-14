@@ -132,7 +132,7 @@
 
 /* Custom controls styling */
 .react-flow__controls {
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.15);
   border-radius: var(--radius);
   overflow: hidden;
   padding: 0;
@@ -142,9 +142,18 @@
   background-color: hsl(var(--border));
 }
 
+/* Define border color for background patterns */
+:root {
+  --border-color: hsl(var(--border));
+}
+
+.dark {
+  --border-color: hsl(var(--border) / 0.6);
+}
+
 .react-flow__controls button {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   border: none;
@@ -162,14 +171,11 @@
 }
 
 .react-flow__controls button svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Add transition effect for smooth zoom animations */
-/* .react-flow__viewport {
-  transition: transform 0.8s ease;
-} */
 
 /* Only apply the transition when zooming, not when dragging */
 .react-flow__viewport.zooming {
@@ -178,6 +184,87 @@
 
 .react-flow__viewport.dragging {
   transition: none;
+}
+
+/* Custom minimap styling */
+.react-flow__minimap {
+  right: 12px;
+  bottom: 12px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+.react-flow__minimap:hover {
+  opacity: 1;
+}
+
+/* Active control button styling */
+.react-flow__controls button.active-control {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+/* Tooltip styling */
+.custom-flow-controls .tooltip {
+  position: absolute;
+  right: 40px;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.custom-flow-controls button:hover .tooltip {
+  opacity: 1;
+}
+
+/* Enhanced background styling */
+.react-flow__background {
+  transition: background-color 0.3s ease;
+}
+
+/* Animation for background pattern change */
+@keyframes patternFade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.react-flow__background.pattern-changing {
+  animation: patternFade 0.5s ease;
+}
+
+/* Keyboard shortcuts indicator */
+.keyboard-shortcuts {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.keyboard-shortcuts:hover {
+  opacity: 1;
+}
+
+.keyboard-shortcuts kbd {
+  background: hsl(var(--muted));
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin: 0 3px;
 }
 
 /* Dark mode control styling */
