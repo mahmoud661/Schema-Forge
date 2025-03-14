@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from "react";
-import { ReactFlow } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
 import { FlowControls } from "./flow-controls";
@@ -104,7 +104,7 @@ export function FlowConfig({
           type: 'custom',
           animated: true,
         }}
-        // Performance settings
+        proOptions={{ hideAttribution: true }}
         nodesDraggable={true}
         nodesConnectable={true}
         elementsSelectable={true}
@@ -120,5 +120,9 @@ export function FlowConfig({
     );
   }, [memoKey]);
   
-  return MemoizedReactFlow;
+  return (
+    <ReactFlowProvider>
+      {MemoizedReactFlow}
+    </ReactFlowProvider>
+  );
 }

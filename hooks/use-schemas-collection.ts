@@ -10,7 +10,6 @@ export interface SchemaMetadata {
   tags: string[];
   lastModified: string; // ISO date string
   createdAt: string;    // ISO date string
-  // Added fields to store the full schema data
   sqlCode?: string;
   nodes?: SchemaNode[];
   edges?: Edge[];

@@ -109,3 +109,146 @@
   height: 12px !important;
   background: #a855f7 !important;
 }
+
+/* Custom styles for React Flow components */
+
+/* Fix panel color in dark mode */
+.react-flow__panel {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+/* Hide React Flow attribution */
+.react-flow__attribution {
+  display: none;
+}
+
+/* Additional panel styling for better dark mode compatibility */
+.dark .react-flow__panel {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/* Custom controls styling */
+.react-flow__controls {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius);
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background-color: hsl(var(--border));
+}
+
+.react-flow__controls button {
+  width: 36px;
+  height: 36px;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.react-flow__controls button:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.react-flow__controls button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Add transition effect for smooth zoom animations */
+/* .react-flow__viewport {
+  transition: transform 0.8s ease;
+} */
+
+/* Only apply the transition when zooming, not when dragging */
+.react-flow__viewport.zooming {
+  transition: transform 0.8s ease;
+}
+
+.react-flow__viewport.dragging {
+  transition: none;
+}
+
+/* Dark mode control styling */
+.dark .react-flow__controls {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  background-color: hsl(var(--border));
+}
+
+.dark .react-flow__controls button {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border: none;
+}
+
+.dark .react-flow__controls button:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+/* Active button state */
+.react-flow__controls button:active {
+  transform: translateY(1px);
+}
+
+/* Focus state for accessibility */
+.react-flow__controls button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+/* Add subtle separator between buttons */
+.react-flow__controls button + button {
+  position: relative;
+}
+
+.react-flow__controls button + button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: hsl(var(--border));
+}
+
+/* Ensure controls are properly positioned */
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* Override default control icons to match your design system */
+.react-flow__controls-zoomin svg,
+.react-flow__controls-zoomout svg,
+.react-flow__controls-fitview svg {
+  stroke-width: 2px;
+}
+
+/* Mobile-friendly adjustments */
+@media (max-width: 640px) {
+  .react-flow__controls {
+    scale: 0.9;
+  }
+}
+
+/* Ensure controls are visible in dark mode */
+.dark .react-flow__controls button {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+
+.dark .react-flow__controls button:hover {
+  background-color: hsl(var(--accent));
+}
