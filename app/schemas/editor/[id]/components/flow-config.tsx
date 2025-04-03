@@ -68,7 +68,6 @@ export function FlowConfig({
     };
   }, [nodes, edges, nodeHooks.selectedNode, refreshKey]);
   
-  // Performance enhancement: Use a memoization for the ReactFlow content
   const MemoizedReactFlow = useMemo(() => {
     return (
       <ReactFlow
@@ -85,25 +84,16 @@ export function FlowConfig({
         fitView
         onDragOver={nodeHooks.onDragOver}
         onDrop={nodeHooks.onDrop}
-        className="bg-muted/30"
-        style={{ width: '100%', height: '100%' }}
         connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
-        snapToGrid={true}
-        snapGrid={[15, 15]}
+
         defaultEdgeOptions={{
           type: 'smoothstep',
           animated: true,
         }}
-        // Performance settings
-        nodesDraggable={true}
-        nodesConnectable={true}
-        elementsSelectable={true}
+    
         minZoom={0.1}
         maxZoom={2.5}
-        nodeExtent={[
-          [-2000, -2000],
-          [4000, 4000]
-        ]}
+    
       >
         <FlowControls />
       </ReactFlow>

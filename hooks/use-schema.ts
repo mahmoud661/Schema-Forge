@@ -7,10 +7,9 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from "@xyflow/react";
-import { create, StateCreator } from "zustand"; // <-- Added StateCreator import
+import { create, StateCreator } from "zustand"; 
 // middlewares
 import { persist, PersistOptions } from "zustand/middleware";
-import { devtools } from "zustand/middleware";
 
 interface EnumType {
   name: string;

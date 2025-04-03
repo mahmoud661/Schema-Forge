@@ -58,11 +58,12 @@ export function useSchemaNodes() {
       const type = event.dataTransfer.getData('application/reactflow');
       if (!type) return;
 
+      
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
-
+      
       if (type === 'table') {
         const baseLabel = "New Table";
         const label = getUniqueLabel(baseLabel, schema.nodes);
@@ -81,7 +82,7 @@ export function useSchemaNodes() {
           data: {
             label,
             id: nodeId,
-            color, // Store color in node data
+            color, 
             schema: [
               { 
                 title: "id", 
