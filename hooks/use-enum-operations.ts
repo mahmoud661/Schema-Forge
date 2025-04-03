@@ -26,13 +26,13 @@ export const useEnumOperations = (
   const findRowsUsingEnum = () => {
     if (!selectedNode) return [];
     
-    const usages: { table: string, row: string }[] = [];
+    const usages: { table: string, column: string }[] = [];
     
     nodes.forEach(node => {
       if ((node.type === 'databaseSchema' || !node.type) && node.data.schema) {
-        node.data.schema.forEach((row: any) => {
-          if (row.type === `enum_${selectedNode.data.name}`) {
-            usages.push({ table: node.data.label, row: row.title });
+        node.data.schema.forEach((column: any) => {
+          if (column.type === `enum_${selectedNode.data.name}`) {
+            usages.push({ table: node.data.label, column: column.title });
           }
         });
       }
@@ -127,12 +127,12 @@ export const useEnumOperations = (
       });
     }
     
-    // Update all rows using this enum
+    // Update all columns using this enum
     if (updateEnumTypeNameInRows) {
       const updated = updateEnumTypeNameInRows(oldName, newName);
       
       if (updated) {
-        toast.info(`Updated ENUM reference in rows`);
+        toast.info(`Updated ENUM reference in columns`);
       }
     }
     
@@ -147,7 +147,7 @@ export const useEnumOperations = (
     
     const enumUsages = findRowsUsingEnum();
     if (enumUsages.length > 0) {
-      toast.error(`Cannot delete: This ENUM is used by ${enumUsages.length} row(s)`);
+      toast.error(`Cannot delete: This ENUM is used by ${enumUsages.length} column(s)`);
       return false;
     }
     

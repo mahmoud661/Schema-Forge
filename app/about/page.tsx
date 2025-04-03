@@ -10,7 +10,7 @@ export default function About() {
       <Navigation />
       <MobileWarning />
       <div className="min-h-[calc(100vh-4rem)] gradient-bg pb-20">
-        <div className="container py-10 px-4 sm:px-6 lg:px-8">
+        <div className="py-10 px-4 sm:px-6 lg:px-8">
           {/* Hero section with enhanced styling */}
           <div className="max-w-5xl mx-auto mb-16 text-center">
             <div className="inline-block animate-bounce-slow mb-4">
@@ -32,7 +32,7 @@ export default function About() {
                 <span className="bg-primary/10 p-2 rounded-full">
                   <Monitor className="h-6 w-6 text-primary" />
                 </span>
-                Our Purpose
+                My Purpose
               </h2>
               
               <p className="text-lg text-muted-foreground leading-relaxed">

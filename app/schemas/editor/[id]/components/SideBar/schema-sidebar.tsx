@@ -22,7 +22,7 @@ import {
 // Import our new components
 import { DraggableElements } from "./schema/draggable-elements";
 import { TablesList } from "./schema/tables-list";
-import { ColumnEditor } from "./row-editor";
+import { ColumnEditor } from "./column-editor";
 import { useTableOperations } from "@/hooks/use-table-operations";
 import { useEnumOperations } from "@/hooks/use-enum-operations";
 import { toast } from "sonner";
@@ -224,12 +224,12 @@ export function Sidebar() {
             </AccordionItem>
           </Accordion>
 
-          {/* Row Editor */}
+          {/* Column Editor */}
           {validNode.data?.schema && (
             <ColumnEditor 
-              rows={validNode.data.schema?.map(row => ({
-                ...row,
-                constraints: row.constraints ?? []
+              columns={validNode.data.schema?.map(column => ({
+                ...column,
+                constraints: column.constraints ?? []
               })) || []}
               onAddColumn={tableOperations.addColumn}
               onUpdateColumn={tableOperations.updateColumn}

@@ -36,17 +36,17 @@ export const ColorPicker = memo(function ColorPicker({
 
   // Curated border colors - well-organized and visually distinct
   const borderColors = [
-    // Row 1: Blues
+    // Column 1: Blues
     '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1',
-    // Row 2: Purples & Pinks
+    // Column 2: Purples & Pinks
     '#a855f7', '#9333ea', '#ec4899', '#db2777',
-    // Row 3: Greens & Teals
+    // Column 3: Greens & Teals
     '#34d399', '#10b981', '#14b8a6', '#0d9488',
-    // Row 4: Reds & Oranges
+    // Column 4: Reds & Oranges
     '#ef4444', '#dc2626', '#f97316', '#ea580c',
-    // Row 5: Yellows & Ambers
+    // Column 5: Yellows & Ambers
     '#fbbf24', '#f59e0b', '#d97706', '#b45309',
-    // Row 6: Neutrals
+    // Column 6: Neutrals
     '#94a3b8', '#64748b', '#475569', '#334155',
   ];
 

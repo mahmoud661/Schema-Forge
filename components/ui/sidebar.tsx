@@ -22,7 +22,7 @@ interface BaseSidebarProps {
   headerActions?: React.ReactNode;
   bordered?: boolean;
   collapsible?: boolean;
-  position?: "left" | "right"; // New prop to specify position
+  position?: "left" | "right"; 
 }
 
 export function BaseSidebar({
@@ -31,7 +31,7 @@ export function BaseSidebar({
   width,
   onWidthChange,
   minWidth = 240,
-  maxWidth = 600,
+  maxWidth = 1000,
   className,
   headerClassName,
   contentClassName,
@@ -41,17 +41,15 @@ export function BaseSidebar({
   headerActions,
   bordered = true,
   collapsible = true,
-  position = "right", // Default to right position
+  position = "right",
 }: BaseSidebarProps) {
-  // Use external width if provided, otherwise use internal state
   const [internalWidth, setInternalWidth] = useState(defaultWidth);
   const sidebarWidth = width !== undefined ? width : internalWidth;
   const [isDragging, setIsDragging] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
-  // Use refs for better performance during dragging
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLDivElement>(null); // Add ref for the toggle button
+  const buttonRef = useRef<HTMLDivElement>(null); 
   const dragStartX = useRef<number>(0);
   const startWidth = useRef<number>(sidebarWidth);
   
@@ -61,11 +59,9 @@ export function BaseSidebar({
     dragStartX.current = e.clientX;
     startWidth.current = sidebarWidth;
     
-    // Add classes to improve UX during dragging
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'col-resize';
     
-    // Remove transition from button during dragging for instant updates
     if (buttonRef.current) {
       buttonRef.current.style.transition = 'none';
     }
@@ -75,24 +71,19 @@ export function BaseSidebar({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return;
       
-      // Calculate new width based on position
-      let newWidth: number;  // Add explicit type annotation
+      let newWidth: number; 
       if (position === "left") {
-        // For left sidebar, width increases when dragging right
         const deltaX = e.clientX - dragStartX.current;
         newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
       } else {
-        // For right sidebar - FIX: when dragging left (clientX decreases), width should increase
         const deltaX = dragStartX.current - e.clientX;
         newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth.current + deltaX));
       }
       
-      // Apply width directly to the DOM for immediate feedback
       if (sidebarRef.current) {
         sidebarRef.current.style.width = `${newWidth}px`;
       }
       
-      // Also update button position immediately
       if (buttonRef.current && !isCollapsed) {
         if (position === "left") {
           buttonRef.current.style.left = `${newWidth - 12}px`;
@@ -101,8 +92,7 @@ export function BaseSidebar({
         }
       }
       
-      // We'll still update state but less frequently
-      // This is a simple way to throttle
+  
       requestAnimationFrame(() => {
         setInternalWidth(newWidth);
         if (onWidthChange) {
@@ -116,16 +106,13 @@ export function BaseSidebar({
       
       setIsDragging(false);
       
-      // Clean up styles
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       
-      // Restore transition on button
       if (buttonRef.current) {
         buttonRef.current.style.transition = '';
       }
       
-      // Final width update
       const finalWidth = parseInt(sidebarRef.current?.style.width || `${sidebarWidth}`, 10);
       if (onWidthChange) {
         onWidthChange(finalWidth);

@@ -18,7 +18,7 @@ interface ColumnData {
 }
 
 interface ColumnEditorProps {
-  rows: ColumnData[];
+  columns: ColumnData[];
   onAddColumn: () => void;
   onUpdateColumn: (index: number, field: string, value: any) => void;
   onRemoveColumn: (index: number) => void;
@@ -43,7 +43,7 @@ const typesWithPrecision = ['decimal', 'numeric', 'money'];
 const typesWithScale = ['decimal', 'numeric'];
 
 export const ColumnEditor: React.FC<ColumnEditorProps> = ({
-  rows,
+  columns,
   onAddColumn,
   onUpdateColumn,
   onRemoveColumn,
@@ -54,7 +54,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
   enumTypes = [],
   onEnumDisconnect,
 }) => {
-  // Track open popover state for each row
+  // Track open popover state for each column
   const [openPopover, setOpenPopover] = useState<Record<string, boolean>>({});
   
   // Create a centralized state for type parameters - fixes the hooks issue
@@ -64,7 +64,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
     scale: string;
   }>>({});
 
-  // Track which rows we've already processed to avoid reinitializing unnecessarily
+  // Track which columns we've already processed to avoid reinitializing unnecessarily
   const processedRows = useRef(new Set<string>());
 
   // Helper to check if a type is an enum type
@@ -93,19 +93,19 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
   // Helper to determine if a type supports scale
   const supportsScale = (type: string) => typesWithScale.includes(type.toLowerCase());
 
-  // Initialize type parameters on component mount or when rows change
+  // Initialize type parameters on component mount or when columns change
   useEffect(() => {
     const newTypeParams: Record<string, any> = {...typeParams};
     let hasNewParams = false;
     
-    rows.forEach((row) => {
-      const rowKey = row.id || `row-${row.title}`;
+    columns.forEach((column) => {
+      const rowKey = column.id || `column-${column.title}`;
       
-      // Skip rows we've already processed
+      // Skip columns we've already processed
       if (processedRows.current.has(rowKey)) return;
       processedRows.current.add(rowKey);
       
-      const { baseType, params } = parseTypeParams(row.type);
+      const { baseType, params } = parseTypeParams(column.type);
       
       // Create or update params object
       if (!newTypeParams[rowKey]) {
@@ -140,9 +140,9 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
     if (hasNewParams) {
       setTypeParams(newTypeParams);
     }
-  }, [rows]);
+  }, [columns]);
 
-  // Update a type parameter for a specific row
+  // Update a type parameter for a specific column
   const updateTypeParam = (rowKey: string, paramType: 'length' | 'precision' | 'scale', value: string) => {
     setTypeParams(prev => ({
       ...prev,
@@ -175,7 +175,7 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
     setOpenPopover(prev => ({ ...prev, [rowKey]: false }));
   };
 
-  // Clear type parameters for a row
+  // Clear type parameters for a column
   const clearTypeParams = (rowIndex: number, baseType: string, rowKey: string) => {
     setTypeParams(prev => ({
       ...prev,
@@ -215,22 +215,22 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-medium text-sm flex items-center gap-1.5">
           <Hash className="h-3.5 w-3.5" />
-          Rows
+          Columns
         </h4>
         <Button onClick={onAddColumn} size="sm" variant="outline" className="h-7 text-xs">
           <Plus className="h-3.5 w-3.5 mr-1" />
-          Add Row
+          Add Column
         </Button>
       </div>
 
       <div className="space-y-3">
-        {rows.map((row, index) => {
-          const rowKey = row.id || `row-${index}`;
-          const isDuplicate = duplicateRows?.[row.title]?.isDuplicate;
-          const enumName = getEnumNameFromType(row.type);
+        {columns.map((column, index) => {
+          const rowKey = column.id || `column-${index}`;
+          const isDuplicate = duplicateRows?.[column.title]?.isDuplicate;
+          const enumName = getEnumNameFromType(column.type);
           
           // Parse the type to get base type and parameters
-          const { baseType, params } = parseTypeParams(row.type);
+          const { baseType, params } = parseTypeParams(column.type);
           
           // Check if this type supports parameters
           const hasLengthSupport = supportsLength(baseType);
@@ -249,14 +249,14 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                   : "hover:border-muted-foreground/20"
               )}
             >
-              {/* Row Header with Warning */}
+              {/* Column Header with Warning */}
               {isDuplicate && (
                 <div className="flex items-center gap-2 p-2 rounded-md bg-yellow-100/50 dark:bg-yellow-900/20 mb-2 text-xs">
                   <AlertTriangle className="h-3.5 w-3.5 text-yellow-700 dark:text-yellow-400 shrink-0" />
                   <span className="text-yellow-800 dark:text-yellow-300">
-                    Duplicate row name in:{' '}
+                    Duplicate column name in:{' '}
                     <strong>
-                      {duplicateRows[row.title].tables.join(', ')}
+                      {duplicateRows[column.title].tables.join(', ')}
                     </strong>
                   </span>
                 </div>
@@ -269,11 +269,11 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                   <Label className="text-xs text-muted-foreground mb-1.5 block">Column Name</Label>
                   <Input
                     placeholder="Column name"
-                    value={row.title}
+                    value={column.title}
                     onChange={(e) => onUpdateColumn(index, 'title', e.target.value)}
                     onBlur={(e) => {
                       const value = e.target.value.trim();
-                      if (value && value !== row.title) {
+                      if (value && value !== column.title) {
                         onUpdateColumn(index, 'title', value);
                       }
                     }}
@@ -313,8 +313,8 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                           <div className="grid grid-cols-1 gap-1 p-1">
                             {/* Option for keeping current enum type */}
                             <SelectItem 
-                              key={row.type} 
-                              value={row.type}
+                              key={column.type} 
+                              value={column.type}
                               className="text-xs cursor-pointer bg-purple-50 dark:bg-purple-900/20"
                             >
                               <div className="flex items-center gap-2">
@@ -337,12 +337,12 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                               </SelectItem>
                             ))}
                             {/* Other enum types */}
-                            {enumTypes.filter(e => `enum_${e.name}` !== row.type).length > 0 && (
+                            {enumTypes.filter(e => `enum_${e.name}` !== column.type).length > 0 && (
                               <>
                                 <div className="h-px bg-muted my-1"></div>
                                 <div className="px-2 py-1 text-xs text-muted-foreground">Other ENUM Types</div>
                                 {enumTypes
-                                  .filter(e => `enum_${e.name}` !== row.type)
+                                  .filter(e => `enum_${e.name}` !== column.type)
                                   .map(e => (
                                     <SelectItem
                                       key={`enum_${e.name}`}
@@ -541,12 +541,12 @@ export const ColumnEditor: React.FC<ColumnEditorProps> = ({
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Constraints</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {constraints.map((constraint) => {
-                    const isActive = (row.constraints || []).includes(constraint.id);
+                    const isActive = (column.constraints || []).includes(constraint.id);
                     const config = constraintConfig[constraint.id as keyof typeof constraintConfig];
                     const ConstraintIcon = config?.icon || AlertCircle;
                     
                     // Skip rendering for enum types that can't be primary keys
-                    if (constraint.id === 'primary' && row.type.startsWith('enum_')) {
+                    if (constraint.id === 'primary' && column.type.startsWith('enum_')) {
                       return null;
                     }
                     

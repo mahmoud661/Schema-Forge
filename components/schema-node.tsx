@@ -88,26 +88,26 @@ const SchemaNode = memo(
     
     // Move tableRows useMemo before conditional as well
     const tableRows = useMemo(() => {
-      // Only create real rows when mounted
+      // Only create real columns when mounted
       if (!mounted) return [];
       
-      return data.schema.map((row: ColumnSchema, idx) => {
-        // ...existing row rendering code...
-        const constraints = row.constraints || [];
+      return data.schema.map((column: ColumnSchema, idx) => {
+        // ...existing column rendering code...
+        const constraints = column.constraints || [];
         const isPrimary = constraints.includes('primary');
         const isUnique = constraints.includes('unique');
         const isNotNull = constraints.includes('notnull');
         const isIndex = constraints.includes('index');
-        const isEnum = row.type.startsWith('enum_'); 
-        const duplicateInfo = duplicateRows?.[row.title];
+        const isEnum = column.type.startsWith('enum_'); 
+        const duplicateInfo = duplicateRows?.[column.title];
         
-        const rowKey = row.id || `${idx}-${row.title}`;
-        const enumName = isEnum ? row.type.replace('enum_', '') : null;
+        const rowKey = column.id || `${idx}-${column.title}`;
+        const enumName = isEnum ? column.type.replace('enum_', '') : null;
 
         // Create left handle component
         const leftHandle = (
           <Handle
-            id={`target-${row.title}`}
+            id={`target-${column.title}`}
             type="target"
             position={Position.Left}
             className="!absolute transition-all duration-150"
@@ -120,7 +120,7 @@ const SchemaNode = memo(
         // Create right handle component
         const rightHandle = (
           <Handle
-            id={`source-${row.title}`}
+            id={`source-${column.title}`}
             type="source"
             position={Position.Right}
             className="!absolute transition-all duration-150"
@@ -142,7 +142,7 @@ const SchemaNode = memo(
             <DatabaseSchemaTableCell className="pl-4 pr-2" leftHandle={leftHandle}>
               <div className="flex items-center gap-2">
                 <span className="truncate text-xs font-medium">
-                  {row.title}
+                  {column.title}
                   {duplicateInfo?.isDuplicate && (
                     <TooltipProvider>
                       <Tooltip>
@@ -150,7 +150,7 @@ const SchemaNode = memo(
                           <AlertCircle className="inline-block ml-1 h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                         </TooltipTrigger>
                         <TooltipContent className="bg-popover text-popover-foreground border">
-                          <p>Row name duplicated in tables:</p>
+                          <p>Column name duplicated in tables:</p>
                           <ul className="list-disc ml-4">
                             {duplicateInfo.tables.map((table) => (
                               <li key={table}>{table}</li>
@@ -199,7 +199,7 @@ const SchemaNode = memo(
                 </TooltipProvider>
               ) : (
                 <span className="text-right truncate text-xs w-full italic opacity-80">
-                  {row.type}
+                  {column.type}
                 </span>
               )}
             </DatabaseSchemaTableCell>

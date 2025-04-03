@@ -242,7 +242,7 @@ export const TablesList: React.FC<TablesListProps> = ({
                     </div>
                     
                     <span className="text-xs text-muted-foreground">
-                      {node.data.schema.length} row
+                      {node.data.schema.length} {node.data.schema.length === 1 ? 'column' : 'columns'}
                     </span>
                   </div>
                   

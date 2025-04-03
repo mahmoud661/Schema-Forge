@@ -142,8 +142,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
       tableMap[originalName] = nodeId;
       rowMap[normalizedName] = {};
       
-      // Process rows in table definition
-      const rows: any[] = [];
+      // Process columns in table definition
+      const columns: any[] = [];
       const rowNames = new Set();
       const rowLines = tableContent.split(/,(?![^(]*\))/).map(line => line.trim()).filter(line => line.length > 0);
       
@@ -233,7 +233,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           const targetTable = directRefMatch[1].trim().replace(/^["'`]|["'`]$/g, '');
           const targetColumn = directRefMatch[2] ? directRefMatch[2].trim().replace(/^["'`]|["'`]$/g, '') : 'id';
           
-          foreignKey = { table: targetTable, row: targetColumn };
+          foreignKey = { table: targetTable, column: targetColumn };
           
           pendingForeignKeys.push({
             sourceNodeId: nodeId,
@@ -245,7 +245,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           });
         }
         
-        // Handle duplicate row names
+        // Handle duplicate column names
         if (rowNames.has(rowName.toLowerCase())) {
           let suffix = 1;
           let newName = `${rowName}_${suffix}`;
@@ -257,11 +257,11 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         }
         
         rowNames.add(rowName.toLowerCase());
-        const rowId = `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const rowId = `column-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         rowMap[normalizedName][rowName.toLowerCase()] = rowId;
         
-        // Add row to table schema
-        rows.push({
+        // Add column to table schema
+        columns.push({
           title: rowName,
           type: rowType,
           constraints,
@@ -290,8 +290,8 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
         }
       }
       
-      // Create table node if it has rows
-      if (rows.length > 0) {
+      // Create table node if it has columns
+      if (columns.length > 0) {
         const existingNode = existingNodesMap.get(normalizedName);
         const position = existingNode 
           ? existingNode.position 
@@ -305,7 +305,7 @@ export const parseSqlToSchema = (sql: string): { nodes: any[], edges: any[], enu
           position,
           data: { 
             label: originalName,
-            schema: rows,
+            schema: columns,
             ...(color && { color })
           }
         });

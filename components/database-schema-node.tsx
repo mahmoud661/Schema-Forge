@@ -40,7 +40,7 @@ export const DatabaseSchemaNodeBody = ({
 
 /* DATABASE SCHEMA TABLE ROW -------------------------------------------------- */
 /**
- * A wrapper for individual table rows in the database schema node.
+ * A wrapper for individual table columns in the database schema node.
  */
 
 export type DatabaseSchemaTableRowProps = {
@@ -89,7 +89,7 @@ export const DatabaseSchemaTableCell = ({
 /* DATABASE SCHEMA NODE ------------------------------------------------------- */
 /**
  * The main DatabaseSchemaNode component that wraps the header and body.
- * It maps over the provided schema data to render rows and cells.
+ * It maps over the provided schema data to render columns and cells.
  */
 export type DatabaseSchemaNodeProps = {
   className?: string;

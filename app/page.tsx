@@ -38,7 +38,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section className="container space-y-6 py-8 md:py-12 lg:py-24 bg-transparent">
+          <section className="space-y-6 py-8 md:py-12 lg:py-24 bg-transparent flex flex-col items-center justify-cente">
             <h2 className="text-3xl font-bold text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
               Why Choose Schema Forge
             </h2>

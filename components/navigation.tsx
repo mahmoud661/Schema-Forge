@@ -78,7 +78,7 @@ export function Navigation() {
         isScrolled ? "border-border bg-background/90 shadow-md" : "border-transparent bg-background/50"
       )}
     >
-      <div className="container flex h-16 items-center justify-between">
+      <div className="flex h-16 items-center justify-between">
         <div className="flex items-center gap-6">
           <div 
             onClick={() => handleNavigation("/")}

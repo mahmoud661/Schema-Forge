@@ -70,7 +70,7 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
   for (const stmt of statements) {
     // Check for incomplete CREATE TABLE statements
     if (stmt.toUpperCase().includes('CREATE TABLE') && !stmt.includes('(')) {
-      errors.push("Incomplete CREATE TABLE statement missing row definitions");
+      errors.push("Incomplete CREATE TABLE statement missing column definitions");
     }
     
     // Check for table name duplicates
@@ -85,14 +85,14 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
       }
     }
     
-    // Check for missing commas in row definitions
+    // Check for missing commas in column definitions
     if (stmt.toUpperCase().includes('CREATE TABLE') && stmt.includes('(')) {
       const rowsSection = stmt.substring(stmt.indexOf('(') + 1, stmt.lastIndexOf(')'));
       const lines = rowsSection.split('\n').filter(line => 
         line.trim() && !line.trim().startsWith('--')
       );
       
-      // Track row names to detect duplicates within a table
+      // Track column names to detect duplicates within a table
       const rowNames = new Set<string>();
       
       for (let i = 0; i < lines.length; i++) {
@@ -110,15 +110,15 @@ export function validateSqlSyntax(sql: string): { isValid: boolean; errors: stri
             !lines[i + 1].trim().startsWith('PRIMARY KEY') &&
             !lines[i + 1].trim().startsWith('FOREIGN KEY') &&
             !lines[i + 1].trim().startsWith('CONSTRAINT')) {
-          errors.push(`Possible missing comma after row definition: "${line}"`);
+          errors.push(`Possible missing comma after column definition: "${line}"`);
         }
         
-        // Check for duplicate row names
+        // Check for duplicate column names
         const rowNameMatch = /^(?:`([^`]+)`|"([^"]+)"|'([^']+)'|(\w+))\s+/i.exec(line);
         if (rowNameMatch) {
           const colName = (rowNameMatch[1] || rowNameMatch[2] || rowNameMatch[3] || rowNameMatch[4])?.toLowerCase();
           if (colName && rowNames.has(colName)) {
-            errors.push(`Duplicate row name "${colName}" in table definition`);
+            errors.push(`Duplicate column name "${colName}" in table definition`);
           }
           if (colName) {
             rowNames.add(colName);
@@ -245,7 +245,7 @@ export function fixCommonSqlIssues(sql: string): string {
   const tableNameRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+\s+\w+)(?!\s*`|"|')\s*\(/gi;
   fixedSql = fixedSql.replace(tableNameRegex, 'CREATE TABLE "$1" (');
   
-  // Fix missing commas between row definitions - but only within CREATE TABLE statements
+  // Fix missing commas between column definitions - but only within CREATE TABLE statements
   const createTableBlocks = fixedSql.match(/CREATE\s+TABLE[^;]+;/gi) || [];
   
   for (const block of createTableBlocks) {
@@ -256,7 +256,7 @@ export function fixCommonSqlIssues(sql: string): string {
     fixedSql = fixedSql.replace(block, fixedBlock);
   }
   
-  // Make sure quoted rows have closing quotes
+  // Make sure quoted columns have closing quotes
   const missingCloseQuoteRegex = /\("(\w+)(?!")(\s+\w+)/g;
   fixedSql = fixedSql.replace(missingCloseQuoteRegex, '("$1"$2');
   

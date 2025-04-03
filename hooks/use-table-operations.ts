@@ -34,7 +34,7 @@ export const useTableOperations = (
         .filter((_: any, i: number) => i !== index);
       
       if (existingTitles.includes(value)) {
-        toast.warning(`Row name "${value}" already exists in this table`);
+        toast.warning(`Column name "${value}" already exists in this table`);
         value = `${value}_${index}`;
       }
       
@@ -104,7 +104,7 @@ export const useTableOperations = (
         );
         
         if (enumNode) {
-          // Create an edge connection from enum to this row
+          // Create an edge connection from enum to this column
           const newEdge = {
             id: `enum-edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             source: enumNode.id,
@@ -122,7 +122,7 @@ export const useTableOperations = (
           updateEdges([...schema.edges, newEdge]);
           
           // Show success toast
-          toast.success(`Connected row to ENUM type "${enumName}"`);
+          toast.success(`Connected column to ENUM type "${enumName}"`);
         }
       }
     }
@@ -135,10 +135,10 @@ export const useTableOperations = (
     if (!selectedNode) return;
     const newSchema = [...(selectedNode.data?.schema || [])];
     
-    // If row has enum type, disconnect it first
-    const row = newSchema[index];
-    if (row.type.startsWith('enum_')) {
-      disconnectEnumFromColumn(selectedNode.id, row.title);
+    // If column has enum type, disconnect it first
+    const column = newSchema[index];
+    if (column.type.startsWith('enum_')) {
+      disconnectEnumFromColumn(selectedNode.id, column.title);
     }
     
     newSchema.splice(index, 1);
@@ -148,12 +148,12 @@ export const useTableOperations = (
   const toggleConstraint = (index: number, constraint: string) => {
     if (!selectedNode) return;
     const newSchema = [...(selectedNode.data?.schema || [])];
-    const row = newSchema[index];
-    const constraints = row.constraints || [];
+    const column = newSchema[index];
+    const constraints = column.constraints || [];
     const hasConstraint = constraints.includes(constraint);
     
     newSchema[index] = {
-      ...row,
+      ...column,
       constraints: hasConstraint 
         ? constraints.filter((c: string) => c !== constraint)
         : [...constraints, constraint]
@@ -164,9 +164,9 @@ export const useTableOperations = (
 
   const disconnectFromEnum = (index: number) => {
     if (!selectedNode) return;
-    const row = selectedNode.data.schema[index];
-    if (row && row.type.startsWith('enum_')) {
-      disconnectEnumFromColumn(selectedNode.id, row.title);
+    const column = selectedNode.data.schema[index];
+    if (column && column.type.startsWith('enum_')) {
+      disconnectEnumFromColumn(selectedNode.id, column.title);
     }
   };
 

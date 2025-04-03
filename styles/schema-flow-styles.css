@@ -54,7 +54,7 @@
   stroke: var(--edge-color);
 }
 
-/* Hover effect for table rows */
+/* Hover effect for table columns */
 .react-flow__node .hover\:bg-muted\/50:hover {
   background-color: rgba(0, 0, 0, 0.05);
 }

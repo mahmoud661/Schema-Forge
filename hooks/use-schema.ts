@@ -227,18 +227,18 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
       if (!node) return state;
       let updatedEnumTypes = state.schema.enumTypes; // Always start with current enumTypes
       if (node.type === 'enumType') {
-        const usedByRows: { table: string; row: string }[] = [];
+        const usedByRows: { table: string; column: string }[] = [];
         state.schema.nodes.forEach((tableNode: any) => {
           if ((tableNode.type === 'databaseSchema' || !tableNode.type) && tableNode.data?.schema) {
-            tableNode.data.schema.forEach((row: any) => {
-              if (row.type === `enum_${node.data.name}`) {
-                usedByRows.push({ table: tableNode.data.label, row: row.title });
+            tableNode.data.schema.forEach((column: any) => {
+              if (column.type === `enum_${node.data.name}`) {
+                usedByRows.push({ table: tableNode.data.label, column: column.title });
               }
             });
           }
         });
         if (usedByRows.length > 0) {
-          console.error(`Cannot delete: This ENUM is used by ${usedByRows.length} row(s)`);
+          console.error(`Cannot delete: This ENUM is used by ${usedByRows.length} column(s)`);
           return state;
         }
         const enumIndex = state.schema.enumTypes.findIndex((et: any) => et.name === node.data.name);

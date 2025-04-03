@@ -26,7 +26,7 @@ export function SqlEditor() {
       title={isAiEditing ? "SQL Editor (AI Editing)" : "SQL Editor"}
       width={widths.sql}
       onWidthChange={(width) => updateWidth('sql', width)}
-      maxWidth={800}
+      maxWidth={1500}
       headerActions={
         <SqlEditorHeader 
           dbType={sqlEditor.dbType}
