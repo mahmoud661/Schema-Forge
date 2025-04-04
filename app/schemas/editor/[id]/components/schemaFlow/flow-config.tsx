@@ -7,6 +7,7 @@ import { useSchemaStore } from "@/hooks/use-schema";
 import { CustomEdge } from "@/components/ui/custom-edge";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DownloadButton } from "./download-button";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
@@ -102,6 +103,7 @@ export function FlowConfig({
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        
         onNodesChange={flowHooks.onNodesChange}
         onEdgesChange={flowHooks.onEdgesChange}
         onConnect={flowHooks.onConnect}
@@ -136,7 +138,8 @@ export function FlowConfig({
         selectionKeyCode={["Shift"]}
       >
         <TooltipProvider>
-          <FlowControls />
+          <FlowControls /> 
+          <DownloadButton className="z-50" /> 
         </TooltipProvider>
       </ReactFlow>
     );

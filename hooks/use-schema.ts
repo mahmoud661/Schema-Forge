@@ -195,8 +195,11 @@ const storeImplementation: StateCreator<SchemaState> = (set, get, api) => ({
     })),
   resetSchema: () =>
     set({ schema: { ...initialSchema, enumTypes: [] } }),
+
   onNodesChange: (changes: NodeChange<SchemaNode>[]) =>
-    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: applyNodeChanges(changes, state.schema.nodes) } })),
+   {console.log("nodeChange" , changes) 
+    set((state: SchemaState) => ({ schema: { ...state.schema, nodes: applyNodeChanges(changes, state.schema.nodes) } }))},
+
   onEdgesChange: (changes: EdgeChange<Edge>[]) =>
     set((state: SchemaState) => ({ schema: { ...state.schema, edges: applyEdgeChanges(changes, state.schema.edges) } })),
   onConnect: (connection: Connection) =>
