@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useEffect } from "react";
-import { ReactFlow, ReactFlowProvider } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider as XYFlowProvider } from "@xyflow/react";
 import SchemaNode from "@/components/schema-node";
 import EnumNode from "@/components/enum-node";
 import { FlowControls } from "./flow-controls";
@@ -7,7 +7,7 @@ import { useSchemaStore } from "@/hooks/use-schema";
 import { CustomEdge } from "@/components/ui/custom-edge";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { DownloadButton } from "./download-button";
+import { useReactFlowContext } from "../../context/react-flow-context";
 
 const nodeTypes = {
   databaseSchema: SchemaNode,
@@ -22,16 +22,19 @@ interface FlowConfigProps {
   flowHooks: any;
   nodeHooks: any;
   refreshKey: number;
+  reactFlowInstanceRef: React.MutableRefObject<any>;
 }
 
 export function FlowConfig({
   flowHooks,
   nodeHooks,
   refreshKey,
+  reactFlowInstanceRef,
 }: FlowConfigProps) {
   // Access nodes and edges directly from the store
   const { schema } = useSchemaStore();
   const { nodes: storeNodes, edges: storeEdges } = schema;
+  const { setNodesGetter } = useReactFlowContext();
 
   // Deduplicate nodes and edges to prevent React key errors
   const nodes = useMemo(() => {
@@ -77,12 +80,20 @@ export function FlowConfig({
         });
       }
 
+      // Register the getNodes function with our context
+      setNodesGetter(() => reactFlowInstance.getNodes);
+
+      // Store the React Flow instance in the ref
+      if (reactFlowInstanceRef) {
+        reactFlowInstanceRef.current = reactFlowInstance;
+      }
+
       if (process.env.NODE_ENV === "development") {
         // @ts-ignore
         window.__reactFlowInstance = reactFlowInstance;
       }
     },
-    [storedViewport]
+    [storedViewport, setNodesGetter, reactFlowInstanceRef]
   );
 
   const memoKey = useMemo(() => {
@@ -100,50 +111,51 @@ export function FlowConfig({
 
   const MemoizedReactFlow = useMemo(() => {
     return (
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        
-        onNodesChange={flowHooks.onNodesChange}
-        onEdgesChange={flowHooks.onEdgesChange}
-        onConnect={flowHooks.onConnect}
-        onNodeClick={nodeHooks.onNodeClick}
-        onNodesDelete={flowHooks.onNodeDelete}
-        onEdgeClick={flowHooks.onEdgeClick}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onInit={onInit}
-        fitView={!storedViewport}
-        onDragOver={nodeHooks.onDragOver}
-        onDrop={nodeHooks.onDrop}
-        className="bg-muted/30"
-        style={{ width: "100%", height: "100%" }}
-        connectionLineStyle={{ stroke: "#3b82f6", strokeWidth: 2 }}
-        defaultEdgeOptions={{
-          type: "custom",
-          animated: true,
-        }}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable={true}
-        nodesConnectable={true}
-        elementsSelectable={true}
-        minZoom={0.1}
-        maxZoom={2.5}
-        nodeExtent={[
-          [-2000, -2000],
-          [4000, 4000],
-        ]}
-        deleteKeyCode={["Backspace", "Delete"]}
-        multiSelectionKeyCode={["Control", "Meta"]}
-        selectionKeyCode={["Shift"]}
-      >
-        <TooltipProvider>
-          <FlowControls /> 
-          <DownloadButton className="z-50" /> 
-        </TooltipProvider>
-      </ReactFlow>
+      <XYFlowProvider>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          
+          onNodesChange={flowHooks.onNodesChange}
+          onEdgesChange={flowHooks.onEdgesChange}
+          onConnect={flowHooks.onConnect}
+          onNodeClick={nodeHooks.onNodeClick}
+          onNodesDelete={flowHooks.onNodeDelete}
+          onEdgeClick={flowHooks.onEdgeClick}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onInit={onInit}
+          fitView={!storedViewport}
+          onDragOver={nodeHooks.onDragOver}
+          onDrop={nodeHooks.onDrop}
+          className="bg-muted/30"
+          style={{ width: "100%", height: "100%" }}
+          connectionLineStyle={{ stroke: "#3b82f6", strokeWidth: 2 }}
+          defaultEdgeOptions={{
+            type: "custom",
+            animated: true,
+          }}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable={true}
+          nodesConnectable={true}
+          elementsSelectable={true}
+          minZoom={0.1}
+          maxZoom={2.5}
+          nodeExtent={[
+            [-2000, -2000],
+            [4000, 4000],
+          ]}
+          deleteKeyCode={["Backspace", "Delete"]}
+          multiSelectionKeyCode={["Control", "Meta"]}
+          selectionKeyCode={["Shift"]}
+        >
+          <TooltipProvider>
+            <FlowControls />
+          </TooltipProvider>
+        </ReactFlow>
+      </XYFlowProvider>
     );
   }, [memoKey]);
 
-  return <ReactFlowProvider>{MemoizedReactFlow}</ReactFlowProvider>;
+  return MemoizedReactFlow;
 }

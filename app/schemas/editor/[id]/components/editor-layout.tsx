@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { EditorHeader } from "./editor-header";
 import { EdgeSidebar } from "./edge-sidebar";
@@ -34,6 +34,8 @@ export function EditorLayout({
     allowExit
   } = flowHooks;
 
+  const reactFlowInstanceRef = useRef(null);
+
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden">
       {children}
@@ -44,6 +46,7 @@ export function EditorLayout({
         setActiveTab={setActiveTab}
         hasUnsavedChanges={hasUnsavedChanges}
         allowExit={allowExit}
+        reactFlowInstanceRef={reactFlowInstanceRef}
       />
       
       <div ref={nodeHooks.reactFlowWrapper} className="flex-1 flex overflow-hidden">
@@ -54,6 +57,7 @@ export function EditorLayout({
             flowHooks={flowHooks}
             nodeHooks={nodeHooks}
             refreshKey={refreshKey}
+            reactFlowInstanceRef={reactFlowInstanceRef}
           />
         </div>
         

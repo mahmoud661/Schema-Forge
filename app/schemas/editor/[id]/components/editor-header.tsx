@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExitConfirmationDialog } from "./exit-confirmation-dialog";
+import { ScreenshotControls } from "./screenshot-controls";
 
 interface EditorHeaderProps {
   onSave: () => void;
@@ -20,6 +21,7 @@ interface EditorHeaderProps {
   setActiveTab: (tab: string) => void;
   hasUnsavedChanges: boolean;
   allowExit?: () => void;
+  reactFlowInstanceRef?: React.MutableRefObject<any>;
 }
 
 export function EditorHeader({
@@ -28,6 +30,7 @@ export function EditorHeader({
   setActiveTab,
   hasUnsavedChanges,
   allowExit,
+  reactFlowInstanceRef
 }: EditorHeaderProps) {
   const router = useRouter();
   const [showExitConfirmation, setShowExitConfirmation] = useState(false);
@@ -36,23 +39,22 @@ export function EditorHeader({
     if (hasUnsavedChanges) {
       setShowExitConfirmation(true);
     } else {
-      // No unsaved changes, just exit
       router.push("/browse");
     }
   };
 
   const handleSaveAndExit = () => {
     onSave();
-    // Mark that we're intentionally exiting
     if (allowExit) allowExit();
     router.push("/browse");
   };
 
   const handleExitWithoutSaving = () => {
-    // Mark that we're intentionally exiting without saving
     if (allowExit) allowExit();
     router.push("/browse");
   };
+
+  const showScreenshotControls = activeTab === "visual";
 
   return (
     <>
@@ -87,8 +89,11 @@ export function EditorHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          {showScreenshotControls && reactFlowInstanceRef && (
+            <ScreenshotControls reactFlowInstanceRef={reactFlowInstanceRef} />
+          )}
           <Button
-            id="exit-editor-button" // Add an ID for programmatic access
+            id="exit-editor-button"
             variant="secondary"
             size="sm"
             onClick={handleExitClick}

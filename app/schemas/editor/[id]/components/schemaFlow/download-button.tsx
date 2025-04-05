@@ -171,20 +171,20 @@ export function DownloadButton({ className }: DownloadButtonProps) {
 
       // Enhanced options for better quality
       const options = {
-        backgroundColor: settings.transparent ? null : '#ffffff',
+        backgroundColor: settings.transparent ? undefined : '#ffffff',
         width: imageWidth,
         height: imageHeight,
-        pixelRatio: settings.quality, // Use the user-defined quality setting
+        pixelRatio: settings.quality,
         style: {
           width: `${imageWidth}px`,
           height: `${imageHeight}px`,
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
         },
-        cacheBust: true, // Avoid caching issues
+        cacheBust: true,
         canvasWidth: imageWidth,
         canvasHeight: imageHeight,
         skipAutoScale: true,
-        fontEmbedCSS: document.querySelector('style')?.textContent || '', // Include fonts
+        fontEmbedCSS: document.querySelector('style')?.textContent || '',
       };
 
       // Generate the PNG image

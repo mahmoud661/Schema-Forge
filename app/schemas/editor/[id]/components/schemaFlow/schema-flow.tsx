@@ -8,6 +8,7 @@ import { useSchemaNodes } from "../../hooks/use-schema-nodes";
 import { useSchemaStore } from "@/hooks/use-schema";
 import { EditorLayout } from ".././editor-layout";
 import { useColorHandlers } from ".././color-handlers";
+import { ReactFlowProvider } from "../../context/react-flow-context";
 
 interface SchemaFlowProps {
   onSave: () => void;
@@ -91,15 +92,17 @@ export function SchemaFlow({ onSave, hasUnsavedChanges, allowExit }: SchemaFlowP
   };
 
   return (
-    <EditorLayout 
-      flowHooks={enhancedFlowHooks}
-      nodeHooks={nodeHooks}
-      activeTab={activeTab}
-      setActiveTab={updateActiveTab}
-      refreshKey={refreshKey}
-      hasUnsavedChanges={hasUnsavedChanges}
-    >
-      <Toaster position="top-right" />
-    </EditorLayout>
+    <ReactFlowProvider>
+      <EditorLayout 
+        flowHooks={enhancedFlowHooks}
+        nodeHooks={nodeHooks}
+        activeTab={activeTab}
+        setActiveTab={updateActiveTab}
+        refreshKey={refreshKey}
+        hasUnsavedChanges={hasUnsavedChanges}
+      >
+        <Toaster position="top-right" />
+      </EditorLayout>
+    </ReactFlowProvider>
   );
 }

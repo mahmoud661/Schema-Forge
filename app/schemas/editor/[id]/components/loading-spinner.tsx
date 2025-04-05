@@ -82,7 +82,6 @@ export function LoadingSpinner({ title = "Loading Schema" }: LoadingSpinnerProps
         <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
           <div 
             className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
           ></div>
         </div>
         
