@@ -92,7 +92,7 @@ export async function captureScreenshot(reactFlowInstance: any, settings: Screen
   
   const visibilityChanges: {el: HTMLElement, originalDisplay: string}[] = [];
   
-  if (controlsEl && !settings.includeControls) {
+  if (controlsEl) {
     visibilityChanges.push({
       el: controlsEl as HTMLElement, 
       originalDisplay: (controlsEl as HTMLElement).style.display

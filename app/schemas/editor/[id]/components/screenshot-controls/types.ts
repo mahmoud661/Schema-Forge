@@ -2,7 +2,6 @@ export interface ScreenshotSettings {
   quality: number;
   padding: number;
   transparent: boolean;
-  includeControls: boolean;
   zoomLevel: number;
   fillCanvas: boolean;
 }
@@ -11,7 +10,6 @@ export const defaultScreenshotSettings: ScreenshotSettings = {
   quality: 2,
   padding: 0.25,
   transparent: false,
-  includeControls: false,
   zoomLevel: 1.2,
   fillCanvas: true,
 };

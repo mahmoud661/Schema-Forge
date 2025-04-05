@@ -73,15 +73,6 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
                 onCheckedChange={(checked) => setSettings({...settings, transparent: checked})}
               />
             </div>
-
-            <div className="flex items-center justify-between">
-              <Label htmlFor="controls">Include Controls</Label>
-              <Switch 
-                id="controls"
-                checked={settings.includeControls}
-                onCheckedChange={(checked) => setSettings({...settings, includeControls: checked})}
-              />
-            </div>
             
             <div className="flex items-center justify-between">
               <Label htmlFor="fillCanvas">Auto-fit Schema</Label>
