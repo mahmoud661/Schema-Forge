@@ -76,7 +76,18 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
                 onCheckedChange={(checked) => setSettings({...settings, transparent: checked})}
               />
             </div>
-            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="hideConectionsPoints" className="mb-0">Hide Connections point</Label>
+                <p className="text-xs text-muted-foreground">hides the connections point between each connection</p>
+              </div>
+              <Switch 
+                id="hideConectionsPoints"
+                checked={settings.hideConectionsPoints}
+                onCheckedChange={(checked) => setSettings({...settings, hideConectionsPoints: checked})}
+              />
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
                 <Label htmlFor="fillCanvas" className="mb-0">Auto-fit Schema</Label>

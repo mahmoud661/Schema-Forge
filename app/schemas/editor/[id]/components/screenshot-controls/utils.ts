@@ -1,4 +1,3 @@
-import { getNodesBounds } from '@xyflow/react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { ScreenshotSettings, ScreenshotOptions } from './types';
@@ -21,8 +20,10 @@ export function getFileName() {
   return schemaTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 }
 
-export function calculateViewport(nodes: any[], settings: ScreenshotSettings) {
-  const nodesBounds = getNodesBounds(nodes);
+export function calculateViewport(reactFlowInstance: any, settings: ScreenshotSettings) {
+  // Use the getNodesBounds from the reactFlowInstance to support sub flows
+  const nodes = reactFlowInstance.getNodes();
+  const nodesBounds = reactFlowInstance.getNodesBounds(nodes);
   
   // Calculate the bounds with padding
   const paddingPixels = SCHEMA_PADDING * 2;
@@ -110,7 +111,8 @@ export async function captureScreenshot(reactFlowInstance: any, settings: Screen
   const reactFlowEl = document.querySelector('.react-flow') as HTMLElement;
   const controlsEl = reactFlowEl?.querySelector('.react-flow__controls');
   const panelEls = reactFlowEl?.querySelectorAll('.react-flow__panel');
-  
+  const handels = reactFlowEl?.querySelectorAll('.react-flow__handle');
+
   const visibilityChanges: {el: HTMLElement, originalDisplay: string}[] = [];
   
   if (controlsEl) {
@@ -134,8 +136,21 @@ export async function captureScreenshot(reactFlowInstance: any, settings: Screen
     });
   }
 
+  if (handels && settings.hideConectionsPoints) {
+    handels.forEach(handle => {
+      const handleEl = handle as HTMLElement;
+      if (!handleEl.classList.contains('screenshot-included')) {
+        visibilityChanges.push({
+          el: handleEl,
+          originalDisplay: handleEl.style.display
+        });
+        handleEl.style.display = 'none';
+      }
+    });
+  }
+  
   try {
-    const viewport = calculateViewport(nodes, settings);
+    const viewport = calculateViewport(reactFlowInstance, settings);
     const options = prepareScreenshotOptions(viewport, settings);
     const dataUrl = await toPng(viewportElement, options);
     return { dataUrl, fileName: getFileName() };
