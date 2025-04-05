@@ -3,8 +3,11 @@ import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { ScreenshotSettings, ScreenshotOptions } from './types';
 
-export const BASE_WIDTH = 1920;
-export const BASE_HEIGHT = 1080;
+// Default minimum dimensions to ensure the image is not too small
+export const MIN_WIDTH = 800;
+export const MIN_HEIGHT = 600;
+// Padding around the schema (in pixels)
+export const SCHEMA_PADDING = 100;
 
 export function downloadImage(dataUrl: string, fileName: string = 'schema') {
   const a = document.createElement('a');
@@ -21,53 +24,71 @@ export function getFileName() {
 export function calculateViewport(nodes: any[], settings: ScreenshotSettings) {
   const nodesBounds = getNodesBounds(nodes);
   
-  const boundsWidth = Math.max(nodesBounds.width, 500);
-  const boundsHeight = Math.max(nodesBounds.height, 400);
+  // Calculate the bounds with padding
+  const paddingPixels = SCHEMA_PADDING * 2;
   
-  const paddingFactor = settings.padding * 2 + 1;
-  const customScale = settings.zoomLevel;
+  // Calculate the dimensions of the image based on the schema content
+  const contentWidth = Math.max(nodesBounds.width, 500);
+  const contentHeight = Math.max(nodesBounds.height, 400);
   
+  // Add padding to the content dimensions
+  const imageWidth = contentWidth + paddingPixels;
+  const imageHeight = contentHeight + paddingPixels;
+  
+  // Apply the quality setting to increase resolution if needed
+  const finalWidth = Math.max(MIN_WIDTH, imageWidth) * settings.quality;
+  const finalHeight = Math.max(MIN_HEIGHT, imageHeight) * settings.quality;
+  
+  // Calculate the center of the nodes
   const centerX = nodesBounds.x + nodesBounds.width / 2;
   const centerY = nodesBounds.y + nodesBounds.height / 2;
   
-  const viewport = {
-    x: BASE_WIDTH / 2 - centerX * customScale,
-    y: BASE_HEIGHT / 2 - centerY * customScale,
-    zoom: customScale
-  };
+  // Calculate the zoom level to fit the content in the viewport
+  // If fillCanvas is true, we calculate the zoom to fit the content in the viewport
+  // Otherwise, we use the specified zoom level
+  let zoom = settings.zoomLevel;
   
   if (settings.fillCanvas) {
-    const widthRatio = boundsWidth / BASE_WIDTH;
-    const heightRatio = boundsHeight / BASE_HEIGHT;
+    const widthRatio = contentWidth / finalWidth;
+    const heightRatio = contentHeight / finalHeight;
     
-    if (widthRatio > heightRatio) {
-      viewport.zoom = (BASE_WIDTH * 0.85) / (boundsWidth * paddingFactor);
-    } else {
-      viewport.zoom = (BASE_HEIGHT * 0.85) / (boundsHeight * paddingFactor);
-    }
+    // Use the larger ratio to ensure the content fits
+    const ratio = Math.max(widthRatio, heightRatio);
     
-    viewport.x = BASE_WIDTH / 2 - centerX * viewport.zoom;
-    viewport.y = BASE_HEIGHT / 2 - centerY * viewport.zoom;
+    // Calculate zoom with the padding factor
+    const paddingFactor = settings.padding * 2 + 1;
+    zoom = 1 / (ratio * paddingFactor);
   }
   
-  viewport.zoom = Math.max(viewport.zoom, 0.5);
+  // Ensure a reasonable zoom level
+  zoom = Math.max(zoom, 0.5);
+  
+  // Calculate viewport position to center the content
+  const viewport = {
+    x: finalWidth / 2 - centerX * zoom,
+    y: finalHeight / 2 - centerY * zoom,
+    zoom: zoom,
+    width: finalWidth,
+    height: finalHeight
+  };
+  
   return viewport;
 }
 
 export function prepareScreenshotOptions(viewport: any, settings: ScreenshotSettings): ScreenshotOptions {
   return {
     backgroundColor: settings.transparent ? undefined : '#ffffff',
-    width: BASE_WIDTH,
-    height: BASE_HEIGHT,
-    pixelRatio: settings.quality,
+    width: viewport.width,
+    height: viewport.height,
+    pixelRatio: 1, // We already account for quality in the viewport calculation
     style: {
-      width: `${BASE_WIDTH}px`,
-      height: `${BASE_HEIGHT}px`,
+      width: `${viewport.width}px`,
+      height: `${viewport.height}px`,
       transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
     },
     cacheBust: true,
-    canvasWidth: BASE_WIDTH,
-    canvasHeight: BASE_HEIGHT,
+    canvasWidth: viewport.width,
+    canvasHeight: viewport.height,
     skipAutoScale: true,
     fontEmbedCSS: document.querySelector('style')?.textContent || '',
   };

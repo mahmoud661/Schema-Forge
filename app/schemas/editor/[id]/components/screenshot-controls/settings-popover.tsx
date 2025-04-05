@@ -30,7 +30,7 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
         <div className="space-y-4">
           <h4 className="font-medium leading-none">Screenshot Settings</h4>
           <p className="text-sm text-muted-foreground">
-            Adjust the quality and appearance of your schema screenshots.
+            Screenshot size automatically adjusts to your schema content.
           </p>
           
           <Separator />
@@ -55,7 +55,7 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
             </div>
 
             <div className="space-y-2">
-              <Label>Padding ({Math.round(settings.padding * 100)}%)</Label>
+              <Label>Content Padding ({Math.round(settings.padding * 100)}%)</Label>
               <Slider 
                 value={[settings.padding * 100]} 
                 min={0} 
@@ -63,6 +63,9 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
                 step={5}
                 onValueChange={(value) => setSettings({...settings, padding: value[0] / 100})} 
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Controls space around your schema elements
+              </p>
             </div>
 
             <div className="flex items-center justify-between">
@@ -75,7 +78,10 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
             </div>
             
             <div className="flex items-center justify-between">
-              <Label htmlFor="fillCanvas">Auto-fit Schema</Label>
+              <div>
+                <Label htmlFor="fillCanvas" className="mb-0">Auto-fit Schema</Label>
+                <p className="text-xs text-muted-foreground">Automatically adjusts zoom to fit schema</p>
+              </div>
               <Switch 
                 id="fillCanvas"
                 checked={settings.fillCanvas}
@@ -83,20 +89,19 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Manual Zoom ({settings.zoomLevel.toFixed(1)}x)</Label>
-              <Slider 
-                value={[settings.zoomLevel * 10]} 
-                min={5} 
-                max={30} 
-                step={1}
-                disabled={settings.fillCanvas}
-                onValueChange={(value) => setSettings({...settings, zoomLevel: value[0] / 10})} 
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {settings.fillCanvas ? "Disabled when Auto-fit is on" : "Adjust to manually set zoom level"}
-              </p>
-            </div>
+            {!settings.fillCanvas && (
+              <div className="space-y-2">
+                <Label>Manual Zoom ({settings.zoomLevel.toFixed(1)}x)</Label>
+                <Slider 
+                  value={[settings.zoomLevel * 10]} 
+                  min={5} 
+                  max={30} 
+                  step={1}
+                  disabled={settings.fillCanvas}
+                  onValueChange={(value) => setSettings({...settings, zoomLevel: value[0] / 10})} 
+                />
+              </div>
+            )}
           </div>
         </div>
       </PopoverContent>
