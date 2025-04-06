@@ -78,10 +78,10 @@ export function calculateViewport(reactFlowInstance: any, settings: ScreenshotSe
 
 export function prepareScreenshotOptions(viewport: any, settings: ScreenshotSettings): ScreenshotOptions {
   return {
-    backgroundColor: settings.transparent ? undefined : '#ffffff',
+    backgroundColor: settings.transparent ? undefined : settings.bgcolor || '#ffffff',
     width: viewport.width,
     height: viewport.height,
-    pixelRatio: 1, // We already account for quality in the viewport calculation
+    pixelRatio: 1, 
     style: {
       width: `${viewport.width}px`,
       height: `${viewport.height}px`,

@@ -76,6 +76,23 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
                 onCheckedChange={(checked) => setSettings({...settings, transparent: checked})}
               />
             </div>
+
+            {!settings.transparent && (
+              <div className="space-y-2">
+                <Label>Background Color</Label>
+                <input
+                title='Background Color'
+                  type="color"
+                  value={settings.bgcolor || '#ffffff'}
+                  onChange={(e) => setSettings({...settings, bgcolor: e.target.value})}
+                  className="w-full h-10 border rounded-md"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Controls the background color of the screenshot
+                </p>
+              </div>
+            )}
+            
             <div className="flex items-center justify-between">
               <div>
                 <Label htmlFor="hideConectionsPoints" className="mb-0">Hide Connections point</Label>
@@ -87,6 +104,7 @@ export function SettingsPopover({ settings, setSettings }: SettingsPopoverProps)
                 onCheckedChange={(checked) => setSettings({...settings, hideConectionsPoints: checked})}
               />
             </div>
+       
 
             <div className="flex items-center justify-between">
               <div>
